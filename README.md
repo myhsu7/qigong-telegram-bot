@@ -11,7 +11,7 @@ Telegram version of the Qigong check-in companion bot.
   - multi-select practice methods
   - reflection note
   - body feeling note
-- same-day overwrite behavior planned in backend phase
+- same-day overwrite behavior implemented in backend API
 
 ## Setup
 
@@ -21,10 +21,26 @@ Telegram version of the Qigong check-in companion bot.
    - `TELEGRAM_WEBHOOK_SECRET`
    - `PUBLIC_BASE_URL`
    - `TELEGRAM_WEBAPP_URL`
+   - `DATABASE_URL`
 3. Install deps:
    - `npm install`
 4. Run dev server:
    - `npm run dev`
+
+## Database setup
+
+Run the initial schema:
+
+```bash
+psql "$DATABASE_URL" -f migrations/001_init.sql
+```
+
+This creates:
+
+- `telegram_users`
+- `practice_methods`
+- `telegram_checkin_logs`
+- `telegram_checkin_method_selections`
 
 ## Webhook route
 
@@ -34,9 +50,24 @@ Telegram version of the Qigong check-in companion bot.
 
 - `GET /webapp/checkin`
 
+## Web App API routes
+
+- `GET /api/webapp/practice-methods`
+- `GET /api/webapp/checkin/today`
+- `POST /api/webapp/checkin`
+
+## Current structured check-in behavior
+
+- User opens Telegram Web App from `/checkin`
+- Bot loads today's saved data if it exists
+- User can select multiple practice methods
+- Reflection note is optional
+- Body feeling note is optional
+- Submitting again on the same day overwrites that day's content instead of creating a second check-in
+
 ## Next implementation steps
 
-1. Add PostgreSQL schema and persistence
-2. Implement Web App auth validation from Telegram init data
-3. Save structured check-ins and same-day overwrite
-4. Add stats, reminders, and admin analysis
+1. Add streak and total-days calculation for Telegram users
+2. Add `/mystats` and leaderboard logic
+3. Add Telegram reminders and solar-term / wisdom rotation
+4. Add admin analysis and method review pages

@@ -3,6 +3,7 @@ import path from 'path';
 import { env } from './config/env';
 import { telegramWebhook } from './bot/telegram';
 import webappRoutes from './routes/webapp';
+import apiRoutes from './routes/api';
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.get('/', (req, res) => {
 
 app.post(`/telegram/webhook/${env.telegramWebhookSecret}`, telegramWebhook);
 app.use('/webapp', webappRoutes);
+app.use('/api/webapp', apiRoutes);
 
 app.listen(env.port, () => {
     console.log(`[telegram-bot] server listening on port ${env.port}`);

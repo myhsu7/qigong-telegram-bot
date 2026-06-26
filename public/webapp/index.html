@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>氣功打卡</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f6f7fb; color: #1f2937; }
     .container { max-width: 640px; margin: 0 auto; padding: 20px; }
@@ -16,38 +17,141 @@
     button { width: 100%; background: #0d6efd; color: #fff; border: 0; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
     button:disabled { background: #9ca3af; }
     .hint { background: #eff6ff; color: #1d4ed8; padding: 10px 12px; border-radius: 10px; font-size: 14px; }
+    .status { margin-top: 12px; font-size: 14px; }
+    .error { color: #b91c1c; }
+    .success { color: #166534; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <h1>今日打卡</h1>
-      <p class="muted">MVP 頁面骨架。下一步會接上 Telegram Web App 身分驗證與 PostgreSQL 儲存。</p>
-      <div class="hint">同一天已打卡時，未來這裡會自動載入已填內容，並允許覆蓋更新。</div>
+      <p class="muted">請勾選今天練習的功法，並可選填心得與身體感受。</p>
+      <div class="hint" id="todayStatus">正在載入今日打卡資料...</div>
     </div>
 
     <div class="card">
       <h2>今日功法（可複選）</h2>
-      <label class="method"><input type="checkbox" name="methods" value="大雁功"> 大雁功</label>
-      <label class="method"><input type="checkbox" name="methods" value="回春功"> 回春功</label>
-      <label class="method"><input type="checkbox" name="methods" value="龜壽功"> 龜壽功</label>
-      <label class="method"><input type="checkbox" name="methods" value="正陽功"> 正陽功</label>
-      <label class="method"><input type="checkbox" name="methods" value="神奇晃海功"> 神奇晃海功</label>
-      <label class="method"><input type="checkbox" name="methods" value="和氣舒壓法"> 和氣舒壓法</label>
-      <label class="method"><input type="checkbox" name="methods" value="蓮花"> 蓮花</label>
+      <div id="methodsContainer"></div>
     </div>
 
     <div class="card">
       <h2>練功心得（選填）</h2>
-      <textarea placeholder="今天練功的心得..."></textarea>
+      <textarea id="reflectionNote" placeholder="今天練功的心得..."></textarea>
     </div>
 
     <div class="card">
       <h2>身體感受（選填）</h2>
-      <textarea placeholder="今天身體有什麼感受..."></textarea>
+      <textarea id="bodyFeelingNote" placeholder="今天身體有什麼感受..."></textarea>
     </div>
 
-    <button type="button" disabled>完成打卡（MVP 下一步接後端）</button>
+    <button type="button" id="submitButton">完成打卡</button>
+    <div id="submitStatus" class="status"></div>
   </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const methodsContainer = document.getElementById('methodsContainer');
+    const reflectionNote = document.getElementById('reflectionNote');
+    const bodyFeelingNote = document.getElementById('bodyFeelingNote');
+    const submitButton = document.getElementById('submitButton');
+    const submitStatus = document.getElementById('submitStatus');
+    const todayStatus = document.getElementById('todayStatus');
+
+    const initData = tg?.initData || '';
+
+    const setStatus = (el, message, className = '') => {
+      el.textContent = message;
+      el.className = `status ${className}`.trim();
+    };
+
+    const apiFetch = async (url, options = {}) => {
+      const headers = new Headers(options.headers || {});
+      headers.set('x-telegram-init-data', initData);
+      if (!headers.has('Content-Type') && options.method && options.method !== 'GET') {
+        headers.set('Content-Type', 'application/json');
+      }
+      const res = await fetch(url, { ...options, headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.json();
+    };
+
+    const renderMethods = (methods, selectedIds = []) => {
+      methodsContainer.innerHTML = '';
+      methods.forEach((method) => {
+        const label = document.createElement('label');
+        label.className = 'method';
+        label.innerHTML = `<input type="checkbox" name="methods" value="${method.id}" ${selectedIds.includes(method.id) ? 'checked' : ''}> ${method.nameZh}`;
+        methodsContainer.appendChild(label);
+      });
+    };
+
+    const getSelectedMethodIds = () => {
+      return [...document.querySelectorAll('input[name="methods"]:checked')].map((el) => Number(el.value));
+    };
+
+    const load = async () => {
+      try {
+        const [methodsResp, todayResp] = await Promise.all([
+          apiFetch('/api/webapp/practice-methods'),
+          apiFetch('/api/webapp/checkin/today')
+        ]);
+
+        renderMethods(methodsResp.methods, todayResp.selectedMethodIds);
+        reflectionNote.value = todayResp.reflectionNote || '';
+        bodyFeelingNote.value = todayResp.bodyFeelingNote || '';
+
+        todayStatus.textContent = todayResp.alreadyCheckedIn
+          ? '你今天已打卡，可修改今日內容後重新送出。'
+          : '今天尚未打卡，請完成以下內容後送出。';
+      } catch (error) {
+        todayStatus.textContent = `載入失敗：${error.message}`;
+        todayStatus.className = 'hint error';
+      }
+    };
+
+    submitButton.addEventListener('click', async () => {
+      const methodIds = getSelectedMethodIds();
+      if (methodIds.length === 0) {
+        setStatus(submitStatus, '請至少勾選一個功法。', 'error');
+        return;
+      }
+
+      submitButton.disabled = true;
+      setStatus(submitStatus, '正在儲存打卡資料...');
+
+      try {
+        const result = await apiFetch('/api/webapp/checkin', {
+          method: 'POST',
+          body: JSON.stringify({
+            methodIds,
+            reflectionNote: reflectionNote.value,
+            bodyFeelingNote: bodyFeelingNote.value,
+            initData
+          })
+        });
+
+        setStatus(submitStatus, `打卡成功：${result.selectedMethods.join('、')}`, 'success');
+        todayStatus.textContent = '今天的打卡內容已儲存，你可以再次修改後重新送出。';
+        if (tg?.HapticFeedback) {
+          tg.HapticFeedback.notificationOccurred('success');
+        }
+      } catch (error) {
+        setStatus(submitStatus, `儲存失敗：${error.message}`, 'error');
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+
+    load();
+  </script>
 </body>
 </html>

@@ -20,5 +20,7 @@ export const env = {
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
     telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
     publicBaseUrl: process.env.PUBLIC_BASE_URL || '',
-    telegramWebappUrl: process.env.TELEGRAM_WEBAPP_URL || ''
+    telegramWebappUrl: process.env.TELEGRAM_WEBAPP_URL || '',
+    databaseUrl: process.env.DATABASE_URL || '',
+    telegramWebappAuthDisabled: process.env.TELEGRAM_WEBAPP_AUTH_DISABLED === 'true'
 };

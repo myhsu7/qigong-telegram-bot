@@ -1,0 +1,32 @@
+{
+  "name": "qigong-telegram-bot",
+  "version": "0.1.0",
+  "description": "Telegram version of the Qigong check-in companion bot with Web App check-in flow.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && cp -r public dist/",
+    "start": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myhsu7/qigong-telegram-bot.git"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/myhsu7/qigong-telegram-bot/issues"
+  },
+  "homepage": "https://github.com/myhsu7/qigong-telegram-bot#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "grammy": "^1.38.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.8.0",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3"
+  }
+}

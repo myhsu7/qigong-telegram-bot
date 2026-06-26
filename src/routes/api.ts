@@ -1,6 +1,7 @@
 import { Request, Router } from 'express';
 import { verifyTelegramWebAppInitData } from '../utils/telegramWebApp';
 import { getPracticeMethods, getTodayCheckin, saveTodayCheckin, upsertTelegramUser } from '../services/checkin';
+import { getUserStats } from '../services/stats';
 
 const router = Router();
 
@@ -42,7 +43,8 @@ router.post('/checkin', async (req, res) => {
         const bodyFeelingNote = typeof req.body?.bodyFeelingNote === 'string' ? req.body.bodyFeelingNote : '';
 
         const saved = await saveTodayCheckin(auth.user.id, methodIds, reflectionNote, bodyFeelingNote);
-        res.json({ ok: true, ...saved });
+        const stats = await getUserStats(auth.user.id);
+        res.json({ ok: true, ...saved, stats });
     } catch (error) {
         console.error('[api] failed to save today checkin', error);
         res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to save check-in' });

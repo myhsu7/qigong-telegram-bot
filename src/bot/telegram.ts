@@ -1,9 +1,23 @@
 import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
 import { env } from '../config/env';
+import { upsertTelegramUser } from '../services/checkin';
+import { buildLeaderboardMessage, buildUserStatsMessage, getUserStats } from '../services/stats';
 
 export const bot = new Bot(env.telegramBotToken);
 
+const ensureUser = async (ctx: any) => {
+    if (!ctx.from) return;
+    await upsertTelegramUser({
+        id: ctx.from.id,
+        username: ctx.from.username,
+        first_name: ctx.from.first_name,
+        last_name: ctx.from.last_name,
+        language_code: ctx.from.language_code
+    });
+};
+
 bot.command('start', async (ctx) => {
+    await ensureUser(ctx);
     const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
 
     await ctx.reply(
@@ -18,16 +32,41 @@ bot.command('start', async (ctx) => {
 });
 
 bot.command('checkin', async (ctx) => {
+    await ensureUser(ctx);
     const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
     await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
 });
 
 bot.command('mystats', async (ctx) => {
-    await ctx.reply('`/mystats` 功能尚在建置中，之後會顯示你的連續天數、總打卡天數與功法分析。');
+    await ensureUser(ctx);
+    if (!ctx.from) return;
+    const stats = await getUserStats(ctx.from.id);
+    await ctx.reply(buildUserStatsMessage(stats));
 });
 
 bot.command('leaderboard', async (ctx) => {
-    await ctx.reply('`/leaderboard` 功能尚在建置中，之後會顯示週 / 月 / 季排行榜。');
+    await ensureUser(ctx);
+    await ctx.reply(await buildLeaderboardMessage('all'));
+});
+
+bot.command('weekly', async (ctx) => {
+    await ensureUser(ctx);
+    await ctx.reply(await buildLeaderboardMessage('week'));
+});
+
+bot.command('monthly', async (ctx) => {
+    await ensureUser(ctx);
+    await ctx.reply(await buildLeaderboardMessage('month'));
+});
+
+bot.command('quarterly', async (ctx) => {
+    await ensureUser(ctx);
+    await ctx.reply(await buildLeaderboardMessage('quarter'));
+});
+
+bot.command('yearly', async (ctx) => {
+    await ensureUser(ctx);
+    await ctx.reply(await buildLeaderboardMessage('year'));
 });
 
 export const telegramWebhook = webhookCallback(bot, 'express');

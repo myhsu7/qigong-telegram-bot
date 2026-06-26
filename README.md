@@ -5,7 +5,7 @@ Telegram version of the Qigong check-in companion bot.
 ## MVP scope
 
 - Telegram bot webhook receiver
-- `/start`, `/checkin`, `/mystats`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`
+- `/start`, `/checkin`, `/mystats`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/method30`, `/method90`, `/remindtest`
 - Telegram Web App check-in entry point
 - Web App form for:
   - multi-select practice methods
@@ -53,6 +53,9 @@ This creates:
 PUBLIC_BASE_URL=https://your-domain.example.com
 TELEGRAM_WEBAPP_URL=https://your-domain.example.com/webapp/checkin
 TELEGRAM_WEBHOOK_SECRET=your_random_secret
+DATABASE_URL=postgres://user:password@host:5432/qigong_telegram_bot
+TELEGRAM_REMINDER_ENABLED=true
+TELEGRAM_REMINDER_HOUR=20
 ```
 
 4. Start the app so the webhook endpoint is available:
@@ -100,6 +103,9 @@ weekly - 查看週排行榜
 monthly - 查看月排行榜
 quarterly - 查看季排行榜
 yearly - 查看年排行榜
+method30 - 查看最近 30 天功法分析
+method90 - 查看最近 90 天功法分析
+remindtest - 手動補發提醒（測試用）
 ```
 
 ## Webhook route
@@ -134,10 +140,18 @@ yearly - 查看年排行榜
   - total check-in days
 - `/leaderboard` shows all-time totals and longest streaks
 - `/weekly`, `/monthly`, `/quarterly`, `/yearly` show period leaderboards
+- `/method30` and `/method90` show structured method mix analysis based on selected practice methods
+
+## Reminder behavior
+
+- If `TELEGRAM_REMINDER_ENABLED=true`, the bot sends a daily reminder at `TELEGRAM_REMINDER_HOUR` (Asia/Taipei)
+- If today is a solar term, the reminder uses the solar-term practice guide
+- Otherwise it rotates through 50 daily wisdom sentences
+- `/remindtest` manually triggers the same reminder flow
 
 ## Next implementation steps
 
-1. Add Telegram reminders and solar-term / wisdom rotation
-2. Add method analysis and review pages
-3. Add Admin Dashboard for Telegram
-4. Add compatibility layer for shared logic with LINE version
+1. Add method analysis and review pages
+2. Add Admin Dashboard for Telegram
+3. Add compatibility layer for shared logic with LINE version
+4. Add badge / level system for Telegram users

@@ -22,5 +22,7 @@ export const env = {
     publicBaseUrl: process.env.PUBLIC_BASE_URL || '',
     telegramWebappUrl: process.env.TELEGRAM_WEBAPP_URL || '',
     databaseUrl: process.env.DATABASE_URL || '',
-    telegramWebappAuthDisabled: process.env.TELEGRAM_WEBAPP_AUTH_DISABLED === 'true'
+    telegramWebappAuthDisabled: process.env.TELEGRAM_WEBAPP_AUTH_DISABLED === 'true',
+    telegramReminderEnabled: process.env.TELEGRAM_REMINDER_ENABLED === 'true',
+    telegramReminderHour: parseInt(process.env.TELEGRAM_REMINDER_HOUR || '20', 10)
 };

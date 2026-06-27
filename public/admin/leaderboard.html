@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telegram 排行榜</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f6f7fb;color:#1f2937}
+    .layout{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+    .sidebar{background:#111827;color:#fff;padding:20px}
+    .sidebar a{display:block;color:#fff;text-decoration:none;padding:10px 12px;border-radius:10px;margin-bottom:8px}
+    .sidebar a.active,.sidebar a:hover{background:#374151}
+    .content{padding:24px}
+    .card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:20px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    table{width:100%;border-collapse:collapse}
+    th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #eee}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    button{padding:10px 14px;border:0;background:#0d6efd;color:#fff;border-radius:10px;cursor:pointer}
+    .ghost{background:#e5e7eb;color:#111827}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2 style="margin-top:0;">Telegram Admin</h2>
+      <a href="/admin">總覽</a>
+      <a href="/admin/leaderboard" class="active">排行榜</a>
+      <a href="/admin/method-analysis">功法分析</a>
+    </aside>
+    <main class="content">
+      <div class="row">
+        <h1 style="margin:0;">排行榜</h1>
+        <div>
+          <button data-period="week">本週</button>
+          <button data-period="month" class="ghost">本月</button>
+          <button data-period="quarter" class="ghost">本季</button>
+          <button data-period="year" class="ghost">本年</button>
+        </div>
+      </div>
+      <div class="grid" style="margin-top:20px;">
+        <div class="card">
+          <h2 style="margin-top:0;">總打卡天數 Top 10</h2>
+          <table id="totalsTable"></table>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0;">最長連續打卡 Top 10</h2>
+          <table id="streaksTable"></table>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+    let currentPeriod = 'week';
+    const buttons = [...document.querySelectorAll('[data-period]')];
+    const setActive = () => buttons.forEach(btn => btn.className = btn.dataset.period === currentPeriod ? '' : 'ghost');
+    const renderTable = (el, rows, valueKey, suffix) => {
+      let html = '<thead><tr><th>#</th><th>名稱</th><th>數值</th></tr></thead><tbody>';
+      rows.forEach((row, i) => {
+        html += `<tr><td>${i+1}</td><td>${row.displayName}</td><td>${row[valueKey]}${suffix}</td></tr>`;
+      });
+      html += '</tbody>';
+      el.innerHTML = html;
+    };
+    const load = async () => {
+      const res = await fetch(`/admin/api/leaderboard?period=${currentPeriod}`);
+      const data = await res.json();
+      renderTable(document.getElementById('totalsTable'), data.totals || [], 'totalDays', '天');
+      renderTable(document.getElementById('streaksTable'), data.streaks || [], 'maxStreak', '天');
+    };
+    buttons.forEach(btn => btn.onclick = () => { currentPeriod = btn.dataset.period; setActive(); load(); });
+    setActive();
+    load();
+  </script>
+</body>
+</html>

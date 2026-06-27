@@ -166,7 +166,26 @@ remindtest - 手動補發提醒（測試用）
 - `GET /api/webapp/checkin/today`
 - `POST /api/webapp/checkin`
 
-## Admin Method Analysis (read-only)
+## Admin Dashboard (read-only)
+
+- Overview: `GET /admin`
+- Leaderboard: `GET /admin/leaderboard`
+- Method Analysis: `GET /admin/method-analysis`
+
+### Admin APIs
+
+- `GET /admin/api/overview?period=week|month|quarter|year`
+- `GET /admin/api/leaderboard?period=week|month|quarter|year`
+- `GET /admin/api/method-analysis/summary?period=30d|90d`
+- `GET /admin/api/method-analysis/search-users?q=keyword`
+- `GET /admin/api/method-analysis/user?userId=...`
+
+### Admin security
+
+- Tailscale internal access only (`ADMIN_ALLOWED_IP_PREFIX`)
+- Basic Auth (`ADMIN_DASH_USER`, `ADMIN_DASH_PASS`)
+
+## Legacy method-analysis detail
 
 - Route: `GET /admin/method-analysis`
 - APIs:

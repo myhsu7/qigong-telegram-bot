@@ -25,6 +25,14 @@ interface PeriodRange {
     end: Date;
 }
 
+export const getAdminPeriodRange = (period: Exclude<LeaderboardPeriod, 'all'>): PeriodRange => {
+    const range = getPeriodRange(period);
+    if (!range) {
+        throw new Error('Admin period does not support all-time range');
+    }
+    return range;
+};
+
 const getPeriodRange = (period: LeaderboardPeriod): PeriodRange | null => {
     const now = moment().tz(TIMEZONE);
     switch (period) {
@@ -185,6 +193,52 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
         .slice(0, 10);
 
     return { totals, streaks };
+};
+
+export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>) => {
+    const { start, end } = getAdminPeriodRange(period);
+
+    const kpiQuery = `
+        SELECT 
+            COUNT(DISTINCT telegram_user_id) AS active_users,
+            COUNT(*) AS total_checkins
+        FROM telegram_checkin_logs
+        WHERE created_at >= $1 AND created_at < $2
+    `;
+    const kpiRes = await db.query(kpiQuery, [start, end]);
+
+    const activeUsers = parseInt(kpiRes.rows[0]?.active_users || '0', 10);
+    const totalCheckins = parseInt(kpiRes.rows[0]?.total_checkins || '0', 10);
+    const daysInPeriod = moment(end).diff(moment(start), 'days') || 1;
+    const avgDailyCheckins = Number((totalCheckins / daysInPeriod).toFixed(1));
+
+    const trendQuery = `
+        SELECT checkin_date, COUNT(*) AS daily_count
+        FROM telegram_checkin_logs
+        WHERE created_at >= $1 AND created_at < $2
+        GROUP BY checkin_date
+        ORDER BY checkin_date ASC
+    `;
+    const trendRes = await db.query(trendQuery, [start, end]);
+
+    const trendMap = new Map<string, number>();
+    trendRes.rows.forEach((row) => {
+        trendMap.set(moment(row.checkin_date).format('YYYY-MM-DD'), parseInt(row.daily_count, 10));
+    });
+
+    const trend: Array<{ date: string; count: number }> = [];
+    let curr = moment(start);
+    const stop = moment(end).subtract(1, 'day');
+    while (curr <= stop) {
+        const key = curr.format('YYYY-MM-DD');
+        trend.push({ date: key, count: trendMap.get(key) || 0 });
+        curr.add(1, 'day');
+    }
+
+    return {
+        kpis: { activeUsers, totalCheckins, avgDailyCheckins },
+        trend
+    };
 };
 
 export const buildUserStatsMessage = (stats: UserStats) => {

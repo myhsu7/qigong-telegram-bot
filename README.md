@@ -29,11 +29,34 @@ Telegram version of the Qigong check-in companion bot.
 
 ## Database setup
 
-Run the initial schema:
+### Option A. If PostgreSQL is already available via `DATABASE_URL`
+
+Run the initial schema directly:
 
 ```bash
 psql "$DATABASE_URL" -f migrations/001_init.sql
 psql "$DATABASE_URL" -f migrations/002_badges.sql
+```
+
+### Option B. If PostgreSQL is running inside Docker
+
+If your PostgreSQL container is `qigong_db` and you want to create the Telegram database inside that container, use:
+
+```bash
+docker exec -it qigong_db psql -U qigong_user -d postgres -c "CREATE DATABASE qigong_telegram_bot;"
+```
+
+Then run the migrations from the host into the containerized PostgreSQL:
+
+```bash
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/001_init.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/002_badges.sql
+```
+
+If you are reusing the same PostgreSQL container as the LINE bot, make sure your `.env` points to the Telegram database:
+
+```ini
+DATABASE_URL=postgres://qigong_user:qigong_password@localhost:5432/qigong_telegram_bot
 ```
 
 This creates:
@@ -67,6 +90,20 @@ TELEGRAM_REMINDER_HOUR=20
 ```bash
 npm run build
 npm start
+```
+
+If you are deploying on your home Ubuntu server and want Telegram to reach the bot through Tailscale Funnel, expose port `3001`:
+
+```bash
+tailscale funnel 3001
+```
+
+Use the resulting public HTTPS URL as `PUBLIC_BASE_URL`, for example:
+
+```ini
+PUBLIC_BASE_URL=https://your-node-name.tailscale.net
+TELEGRAM_WEBAPP_URL=https://your-node-name.tailscale.net/webapp/checkin
+TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-node-name.tailscale.net/webapp/achievements
 ```
 
 5. Register the webhook with Telegram:

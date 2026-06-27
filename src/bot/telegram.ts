@@ -18,6 +18,12 @@ const ensureUser = async (ctx: any) => {
     });
 };
 
+const openCheckinWebApp = async (ctx: any) => {
+    await ensureUser(ctx);
+    const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
+    await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
+};
+
 bot.command('start', async (ctx) => {
     await ensureUser(ctx);
     const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
@@ -34,9 +40,12 @@ bot.command('start', async (ctx) => {
 });
 
 bot.command('checkin', async (ctx) => {
-    await ensureUser(ctx);
-    const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
-    await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
+    await openCheckinWebApp(ctx);
+});
+
+// Forgiving alias for common typo
+bot.command('chickin', async (ctx) => {
+    await openCheckinWebApp(ctx);
 });
 
 bot.command('mystats', async (ctx) => {

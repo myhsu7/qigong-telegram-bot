@@ -1,7 +1,7 @@
 import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
 import { env } from '../config/env';
 import { upsertTelegramUser } from '../services/checkin';
-import { buildLeaderboardMessage, buildUserStatsMessage, getUserStats } from '../services/stats';
+import { buildBadgesMessage, buildEnhancedUserStatsMessage, buildLeaderboardMessage, getUserStats } from '../services/stats';
 import { buildMethodMixMessage, getUserMethodMix } from '../services/methodAnalysis';
 import { sendDailyTelegramReminder } from '../services/reminders';
 
@@ -43,7 +43,13 @@ bot.command('mystats', async (ctx) => {
     await ensureUser(ctx);
     if (!ctx.from) return;
     const stats = await getUserStats(ctx.from.id);
-    await ctx.reply(buildUserStatsMessage(stats));
+    await ctx.reply(await buildEnhancedUserStatsMessage(ctx.from.id, stats));
+});
+
+bot.command('badges', async (ctx) => {
+    await ensureUser(ctx);
+    if (!ctx.from) return;
+    await ctx.reply(await buildBadgesMessage(ctx.from.id));
 });
 
 bot.command('leaderboard', async (ctx) => {

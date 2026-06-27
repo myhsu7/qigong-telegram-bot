@@ -5,7 +5,7 @@ Telegram version of the Qigong check-in companion bot.
 ## MVP scope
 
 - Telegram bot webhook receiver
-- `/start`, `/checkin`, `/mystats`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/method30`, `/method90`, `/remindtest`
+- `/start`, `/checkin`, `/mystats`, `/badges`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/method30`, `/method90`, `/remindtest`
 - Telegram Web App check-in entry point
 - Web App form for:
   - multi-select practice methods
@@ -33,6 +33,7 @@ Run the initial schema:
 
 ```bash
 psql "$DATABASE_URL" -f migrations/001_init.sql
+psql "$DATABASE_URL" -f migrations/002_badges.sql
 ```
 
 This creates:
@@ -41,6 +42,8 @@ This creates:
 - `practice_methods`
 - `telegram_checkin_logs`
 - `telegram_checkin_method_selections`
+- `telegram_badges`
+- `telegram_user_badges`
 
 ## Telegram webhook setup
 
@@ -98,6 +101,7 @@ Suggested command list:
 start - 啟動氣功打卡小幫手
 checkin - 開啟今日打卡表單
 mystats - 查看個人打卡統計
+badges - 查看個人成就勳章
 leaderboard - 查看總排行榜
 weekly - 查看週排行榜
 monthly - 查看月排行榜
@@ -149,6 +153,10 @@ remindtest - 手動補發提醒（測試用）
   - current streak
   - longest streak
   - total check-in days
+- `/mystats` also shows:
+  - cultivation level title
+  - earned badges trophy case
+- `/badges` lists each unlocked badge with description
 - `/leaderboard` shows all-time totals and longest streaks
 - `/weekly`, `/monthly`, `/quarterly`, `/yearly` show period leaderboards
 - `/method30` and `/method90` show structured method mix analysis based on selected practice methods
@@ -168,9 +176,23 @@ remindtest - 手動補發提醒（測試用）
 - Otherwise it rotates through 50 daily wisdom sentences
 - `/remindtest` manually triggers the same reminder flow
 
+## Badge and Level system
+
+- Levels are based on total check-in days:
+  - 練氣 (Level 1): 0-29 days
+  - 築基 (Level 2): 30-89 days
+  - 結丹 (Level 3): 90-199 days
+  - 化境 (Level 4): 200+ days
+- Badge categories:
+  - Streak badges: 3 / 7 / 21 / 100 days
+  - Total day badges: 10 / 100 days
+  - Time-based badges: morning / night consistency
+  - Seasonal badges: 夏練三伏 / 冬練三九 (annual repeatable)
+- Badges are only evaluated on the first successful check-in of a day. Same-day overwrite updates content only and does not re-add total days.
+
 ## Next implementation steps
 
-1. Add method analysis and review pages
-2. Add Admin Dashboard for Telegram
-3. Add compatibility layer for shared logic with LINE version
-4. Add badge / level system for Telegram users
+1. Beautify badges in Telegram Web App / admin UI
+2. Add compatibility layer for shared logic with LINE version
+3. Add group reminder strategy for Telegram communities
+4. Add richer personal history/review pages

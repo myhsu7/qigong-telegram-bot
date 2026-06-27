@@ -1,5 +1,6 @@
 import moment from 'moment-timezone';
 import { db } from '../db';
+import { getUserBadges } from './badges';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -11,6 +12,13 @@ export interface UserStats {
     longestStreak: number;
     lastCheckinDate: string | null;
 }
+
+export const getLevelTitle = (totalCheckins: number) => {
+    if (totalCheckins >= 200) return '化境 (Level 4)';
+    if (totalCheckins >= 90) return '結丹 (Level 3)';
+    if (totalCheckins >= 30) return '築基 (Level 2)';
+    return '練氣 (Level 1)';
+};
 
 interface PeriodRange {
     start: Date;
@@ -192,6 +200,60 @@ export const buildUserStatsMessage = (stats: UserStats) => {
         `⭐ 總打卡天數：${stats.totalCheckins} 天`,
         `🗓 最近打卡日期：${stats.lastCheckinDate}`
     ].join('\n');
+};
+
+export const buildEnhancedUserStatsMessage = async (telegramUserId: number, stats: UserStats) => {
+    if (stats.totalCheckins === 0) {
+        return '你目前還沒有打卡紀錄，先用 /checkin 開始今天的練功吧！';
+    }
+
+    const badges = await getUserBadges(telegramUserId);
+    const levelTitle = getLevelTitle(stats.totalCheckins);
+    let trophy = '目前還沒有勳章，快去打卡解鎖吧！';
+
+    if (badges.length > 0) {
+        const grouped = new Map<string, { emoji: string; years: number[]; count: number }>();
+        for (const badge of badges) {
+            if (!grouped.has(badge.name)) {
+                grouped.set(badge.name, { emoji: badge.emoji || '', years: [], count: 0 });
+            }
+            const item = grouped.get(badge.name)!;
+            item.count += 1;
+            if (badge.earned_year && badge.earned_year !== 0) item.years.push(badge.earned_year);
+        }
+        trophy = [...grouped.entries()].map(([name, item]) => {
+            const countText = item.count > 1 ? ` x${item.count}` : '';
+            const yearText = item.years.length > 0 ? ` [${item.years.join(', ')}]` : '';
+            return `${item.emoji} ${name}${countText}${yearText}`;
+        }).join('\n');
+    }
+
+    return [
+        '📊 你的修練數據',
+        '',
+        `【當前境界】${levelTitle}`,
+        `🔥 目前連續打卡：${stats.currentStreak} 天`,
+        `📈 最長連續打卡：${stats.longestStreak} 天`,
+        `⭐ 總打卡天數：${stats.totalCheckins} 天`,
+        `🗓 最近打卡日期：${stats.lastCheckinDate}`,
+        '',
+        '🏆 你的榮譽勳章：',
+        trophy
+    ].join('\n');
+};
+
+export const buildBadgesMessage = async (telegramUserId: number) => {
+    const badges = await getUserBadges(telegramUserId);
+    if (badges.length === 0) {
+        return '🏆 你目前還沒有解鎖任何勳章，持續打卡很快就會有第一枚成就！';
+    }
+
+    let msg = '🏆 你的成就勳章\n\n';
+    badges.forEach((badge, index) => {
+        const yearText = badge.earned_year && badge.earned_year !== 0 ? `（${badge.earned_year}）` : '';
+        msg += `${index + 1}. ${badge.emoji || '🏅'} ${badge.name}${yearText}\n   ${badge.description || ''}\n`;
+    });
+    return msg.trim();
 };
 
 export const buildLeaderboardMessage = async (period: LeaderboardPeriod) => {

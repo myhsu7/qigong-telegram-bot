@@ -140,7 +140,10 @@
         });
 
         const streakText = result.stats ? `｜連續 ${result.stats.currentStreak} 天｜總計 ${result.stats.totalCheckins} 天` : '';
-        setStatus(submitStatus, `打卡成功：${result.selectedMethods.join('、')}${streakText}`, 'success');
+        const badgeText = result.unlockedBadges && result.unlockedBadges.length > 0
+          ? `｜解鎖：${result.unlockedBadges.map(b => `${b.emoji} ${b.name}`).join('、')}`
+          : '';
+        setStatus(submitStatus, `打卡成功：${result.selectedMethods.join('、')}${streakText}${badgeText}`, 'success');
         todayStatus.textContent = '今天的打卡內容已儲存，你可以再次修改後重新送出。';
         if (tg?.HapticFeedback) {
           tg.HapticFeedback.notificationOccurred('success');

@@ -26,14 +26,20 @@ const openCheckinWebApp = async (ctx: any) => {
 
 bot.command('start', async (ctx) => {
     await ensureUser(ctx);
-    const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
+    const keyboard = new InlineKeyboard()
+        .webApp('✅ 開始打卡', env.telegramWebappUrl)
+        .row()
+        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
 
     await ctx.reply(
         [
             '歡迎使用氣功打卡小幫手（Telegram 版）！',
             '',
-            '目前 MVP 版已可使用 Web App 打卡入口。',
-            '你可以直接點下方按鈕開始今日打卡。'
+            '你可以直接使用下方兩個主要入口：',
+            '1. ✅ 打卡',
+            '2. 🏮 成就頁',
+            '',
+            '每天練功、每天記錄，穩穩累積你的功力與成就。'
         ].join('\n'),
         { reply_markup: keyboard }
     );

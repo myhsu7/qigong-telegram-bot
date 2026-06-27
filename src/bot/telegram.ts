@@ -52,6 +52,12 @@ bot.command('badges', async (ctx) => {
     await ctx.reply(await buildBadgesMessage(ctx.from.id));
 });
 
+bot.command('achievements', async (ctx) => {
+    await ensureUser(ctx);
+    const keyboard = new InlineKeyboard().webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
+    await ctx.reply('請點下方按鈕開啟你的成就頁。', { reply_markup: keyboard });
+});
+
 bot.command('leaderboard', async (ctx) => {
     await ensureUser(ctx);
     await ctx.reply(await buildLeaderboardMessage('all'));

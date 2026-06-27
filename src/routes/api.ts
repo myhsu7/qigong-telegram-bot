@@ -1,8 +1,9 @@
 import { Request, Router } from 'express';
 import { verifyTelegramWebAppInitData } from '../utils/telegramWebApp';
 import { getPracticeMethods, getTodayCheckin, saveTodayCheckin, upsertTelegramUser } from '../services/checkin';
-import { getUserStats } from '../services/stats';
+import { getLevelTitle, getUserStats } from '../services/stats';
 import { evaluateTelegramBadges } from '../services/badges';
+import { getUserBadges } from '../services/badges';
 
 const router = Router();
 
@@ -50,6 +51,32 @@ router.post('/checkin', async (req, res) => {
     } catch (error) {
         console.error('[api] failed to save today checkin', error);
         res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to save check-in' });
+    }
+});
+
+router.get('/achievements', async (req, res) => {
+    try {
+        const initData = resolveInitData(req);
+        const auth = verifyTelegramWebAppInitData(initData);
+        await upsertTelegramUser(auth.user);
+
+        const stats = await getUserStats(auth.user.id);
+        const badges = await getUserBadges(auth.user.id);
+        const levelTitle = getLevelTitle(stats.totalCheckins);
+
+        let nextMilestone = null;
+        if (stats.totalCheckins < 30) {
+            nextMilestone = { type: 'level', title: '築基 (Level 2)', remaining: 30 - stats.totalCheckins, unit: '天總打卡' };
+        } else if (stats.totalCheckins < 90) {
+            nextMilestone = { type: 'level', title: '結丹 (Level 3)', remaining: 90 - stats.totalCheckins, unit: '天總打卡' };
+        } else if (stats.totalCheckins < 200) {
+            nextMilestone = { type: 'level', title: '化境 (Level 4)', remaining: 200 - stats.totalCheckins, unit: '天總打卡' };
+        }
+
+        res.json({ stats, badges, levelTitle, nextMilestone });
+    } catch (error) {
+        console.error('[api] failed to load achievements', error);
+        res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
 });
 

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的成就</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: linear-gradient(180deg,#f8fafc,#eef2ff); color: #1f2937; }
+    .container { max-width: 760px; margin: 0 auto; padding: 20px; }
+    .card { background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-radius: 18px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.08); margin-bottom: 16px; }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    .muted { color: #6b7280; }
+    .stat-grid { display:grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin-top: 12px; }
+    .stat { background:#f8fafc; border-radius:14px; padding:14px; }
+    .stat .label { color:#6b7280; font-size:13px; }
+    .stat .value { font-size:22px; font-weight:700; margin-top:6px; }
+    .progress-wrap { background:#e5e7eb; border-radius:999px; overflow:hidden; height:12px; margin-top:10px; }
+    .progress-bar { height:100%; background: linear-gradient(90deg,#0d6efd,#7c3aed); width:0%; }
+    .badge-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap: 12px; }
+    .badge-card { background:#fff; border:1px solid #eef2ff; border-radius:16px; padding:14px; min-height:120px; box-shadow: 0 4px 12px rgba(0,0,0,.04); }
+    .badge-emoji { font-size:28px; }
+    .badge-name { font-weight:700; margin-top:6px; }
+    .badge-desc { color:#6b7280; font-size:13px; margin-top:6px; line-height:1.4; }
+    .empty { text-align:center; color:#6b7280; padding:30px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>🏮 我的成就</h1>
+      <div class="muted">查看你的境界、總打卡、連續天數與已解鎖勳章。</div>
+      <div id="summary"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">🏆 榮譽勳章</h2>
+      <div id="badgeGrid" class="badge-grid"></div>
+      <div id="badgeEmpty" class="empty" style="display:none;">目前還沒有勳章，持續打卡很快就會有第一枚成就！</div>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+    const initData = tg?.initData || '';
+
+    const apiFetch = async (url) => {
+      const res = await fetch(url, { headers: { 'x-telegram-init-data': initData } });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.json();
+    };
+
+    const render = async () => {
+      try {
+        const data = await apiFetch('/api/webapp/achievements');
+        const stats = data.stats;
+        const nextMilestone = data.nextMilestone;
+
+        let progressPercent = 100;
+        if (stats.totalCheckins < 30) progressPercent = (stats.totalCheckins / 30) * 100;
+        else if (stats.totalCheckins < 90) progressPercent = ((stats.totalCheckins - 30) / 60) * 100;
+        else if (stats.totalCheckins < 200) progressPercent = ((stats.totalCheckins - 90) / 110) * 100;
+
+        document.getElementById('summary').innerHTML = `
+          <div style="font-size:18px;font-weight:700;margin-top:12px;">【當前境界】${data.levelTitle}</div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${Math.max(0, Math.min(progressPercent, 100)).toFixed(1)}%"></div></div>
+          <div class="muted" style="margin-top:8px;">${nextMilestone ? `距離 ${nextMilestone.title} 還差 ${nextMilestone.remaining} ${nextMilestone.unit}` : '你已達到目前最高等級，持續精進！'}</div>
+          <div class="stat-grid">
+            <div class="stat"><div class="label">目前連續打卡</div><div class="value">${stats.currentStreak} 天</div></div>
+            <div class="stat"><div class="label">最長連續打卡</div><div class="value">${stats.longestStreak} 天</div></div>
+            <div class="stat"><div class="label">總打卡天數</div><div class="value">${stats.totalCheckins} 天</div></div>
+            <div class="stat"><div class="label">最近打卡日期</div><div class="value" style="font-size:18px;">${stats.lastCheckinDate || '-'}</div></div>
+          </div>
+        `;
+
+        const badgeGrid = document.getElementById('badgeGrid');
+        const badgeEmpty = document.getElementById('badgeEmpty');
+        if (!data.badges || data.badges.length === 0) {
+          badgeEmpty.style.display = 'block';
+          return;
+        }
+        badgeEmpty.style.display = 'none';
+        badgeGrid.innerHTML = '';
+        data.badges.forEach((badge) => {
+          const yearText = badge.earned_year && badge.earned_year !== 0 ? ` <span class="muted">(${badge.earned_year})</span>` : '';
+          const card = document.createElement('div');
+          card.className = 'badge-card';
+          card.innerHTML = `
+            <div class="badge-emoji">${badge.emoji || '🏅'}</div>
+            <div class="badge-name">${badge.name}${yearText}</div>
+            <div class="badge-desc">${badge.description || ''}</div>
+          `;
+          badgeGrid.appendChild(card);
+        });
+      } catch (error) {
+        document.getElementById('summary').innerHTML = `<div class="muted">載入失敗：${error.message}</div>`;
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>

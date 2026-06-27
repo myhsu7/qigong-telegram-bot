@@ -21,6 +21,7 @@ export const env = {
     telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
     publicBaseUrl: process.env.PUBLIC_BASE_URL || '',
     telegramWebappUrl: process.env.TELEGRAM_WEBAPP_URL || '',
+    telegramAchievementsWebappUrl: process.env.TELEGRAM_ACHIEVEMENTS_WEBAPP_URL || process.env.TELEGRAM_WEBAPP_URL?.replace('/checkin', '/achievements') || '',
     databaseUrl: process.env.DATABASE_URL || '',
     telegramWebappAuthDisabled: process.env.TELEGRAM_WEBAPP_AUTH_DISABLED === 'true',
     telegramReminderEnabled: process.env.TELEGRAM_REMINDER_ENABLED === 'true',

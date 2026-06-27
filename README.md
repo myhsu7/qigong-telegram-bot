@@ -5,7 +5,7 @@ Telegram version of the Qigong check-in companion bot.
 ## MVP scope
 
 - Telegram bot webhook receiver
-- `/start`, `/checkin`, `/mystats`, `/badges`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/method30`, `/method90`, `/remindtest`
+- `/start`, `/checkin`, `/mystats`, `/badges`, `/achievements`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/method30`, `/method90`, `/remindtest`
 - Telegram Web App check-in entry point
 - Web App form for:
   - multi-select practice methods
@@ -55,6 +55,7 @@ This creates:
 ```ini
 PUBLIC_BASE_URL=https://your-domain.example.com
 TELEGRAM_WEBAPP_URL=https://your-domain.example.com/webapp/checkin
+TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-domain.example.com/webapp/achievements
 TELEGRAM_WEBHOOK_SECRET=your_random_secret
 DATABASE_URL=postgres://user:password@host:5432/qigong_telegram_bot
 TELEGRAM_REMINDER_ENABLED=true
@@ -102,6 +103,7 @@ start - 啟動氣功打卡小幫手
 checkin - 開啟今日打卡表單
 mystats - 查看個人打卡統計
 badges - 查看個人成就勳章
+achievements - 開啟成就頁
 leaderboard - 查看總排行榜
 weekly - 查看週排行榜
 monthly - 查看月排行榜
@@ -119,6 +121,7 @@ remindtest - 手動補發提醒（測試用）
 ## Web App route
 
 - `GET /webapp/checkin`
+- `GET /webapp/achievements`
 
 ## Web App API routes
 
@@ -157,6 +160,7 @@ remindtest - 手動補發提醒（測試用）
   - cultivation level title
   - earned badges trophy case
 - `/badges` lists each unlocked badge with description
+- `/achievements` opens a prettier Web App achievement page with level progress and badge cards
 - `/leaderboard` shows all-time totals and longest streaks
 - `/weekly`, `/monthly`, `/quarterly`, `/yearly` show period leaderboards
 - `/method30` and `/method90` show structured method mix analysis based on selected practice methods

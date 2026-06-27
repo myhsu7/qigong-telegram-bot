@@ -24,9 +24,9 @@
   <div class="layout">
     <aside class="sidebar">
       <h2 style="margin-top:0;">Telegram Admin</h2>
-      <a href="/admin">總覽</a>
-      <a href="/admin/leaderboard" class="active">排行榜</a>
-      <a href="/admin/method-analysis">功法分析</a>
+      <a href="/telegram/admin">總覽</a>
+      <a href="/telegram/admin/leaderboard" class="active">排行榜</a>
+      <a href="/telegram/admin/method-analysis">功法分析</a>
     </aside>
     <main class="content">
       <div class="row">
@@ -63,7 +63,7 @@
       el.innerHTML = html;
     };
     const load = async () => {
-      const res = await fetch(`/admin/api/leaderboard?period=${currentPeriod}`);
+      const res = await fetch(`/telegram/admin/api/leaderboard?period=${currentPeriod}`);
       const data = await res.json();
       renderTable(document.getElementById('totalsTable'), data.totals || [], 'totalDays', '天');
       renderTable(document.getElementById('streaksTable'), data.streaks || [], 'maxStreak', '天');

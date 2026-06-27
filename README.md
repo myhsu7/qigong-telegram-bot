@@ -77,8 +77,8 @@ This creates:
 
 ```ini
 PUBLIC_BASE_URL=https://your-domain.example.com
-TELEGRAM_WEBAPP_URL=https://your-domain.example.com/webapp/checkin
-TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-domain.example.com/webapp/achievements
+TELEGRAM_WEBAPP_URL=https://your-domain.example.com/telegram/webapp/checkin
+TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-domain.example.com/telegram/webapp/achievements
 TELEGRAM_WEBHOOK_SECRET=your_random_secret
 DATABASE_URL=postgres://user:password@host:5432/qigong_telegram_bot
 TELEGRAM_REMINDER_ENABLED=true
@@ -102,8 +102,8 @@ Use the resulting public HTTPS URL as `PUBLIC_BASE_URL`, for example:
 
 ```ini
 PUBLIC_BASE_URL=https://your-node-name.tailscale.net
-TELEGRAM_WEBAPP_URL=https://your-node-name.tailscale.net/webapp/checkin
-TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-node-name.tailscale.net/webapp/achievements
+TELEGRAM_WEBAPP_URL=https://your-node-name.tailscale.net/telegram/webapp/checkin
+TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-node-name.tailscale.net/telegram/webapp/achievements
 ```
 
 5. Register the webhook with Telegram:
@@ -157,28 +157,29 @@ remindtest - 手動補發提醒（測試用）
 
 ## Web App route
 
-- `GET /webapp/checkin`
-- `GET /webapp/achievements`
+- `GET /telegram/webapp/checkin`
+- `GET /telegram/webapp/achievements`
 
 ## Web App API routes
 
-- `GET /api/webapp/practice-methods`
-- `GET /api/webapp/checkin/today`
-- `POST /api/webapp/checkin`
+- `GET /telegram/api/webapp/practice-methods`
+- `GET /telegram/api/webapp/checkin/today`
+- `POST /telegram/api/webapp/checkin`
+- `GET /telegram/api/webapp/achievements`
 
 ## Admin Dashboard (read-only)
 
-- Overview: `GET /admin`
-- Leaderboard: `GET /admin/leaderboard`
-- Method Analysis: `GET /admin/method-analysis`
+- Overview: `GET /telegram/admin`
+- Leaderboard: `GET /telegram/admin/leaderboard`
+- Method Analysis: `GET /telegram/admin/method-analysis`
 
 ### Admin APIs
 
-- `GET /admin/api/overview?period=week|month|quarter|year`
-- `GET /admin/api/leaderboard?period=week|month|quarter|year`
-- `GET /admin/api/method-analysis/summary?period=30d|90d`
-- `GET /admin/api/method-analysis/search-users?q=keyword`
-- `GET /admin/api/method-analysis/user?userId=...`
+- `GET /telegram/admin/api/overview?period=week|month|quarter|year`
+- `GET /telegram/admin/api/leaderboard?period=week|month|quarter|year`
+- `GET /telegram/admin/api/method-analysis/summary?period=30d|90d`
+- `GET /telegram/admin/api/method-analysis/search-users?q=keyword`
+- `GET /telegram/admin/api/method-analysis/user?userId=...`
 
 ### Admin security
 
@@ -187,11 +188,11 @@ remindtest - 手動補發提醒（測試用）
 
 ## Legacy method-analysis detail
 
-- Route: `GET /admin/method-analysis`
+- Route: `GET /telegram/admin/method-analysis`
 - APIs:
-  - `GET /admin/api/method-analysis/summary?period=30d|90d`
-  - `GET /admin/api/method-analysis/search-users?q=keyword`
-  - `GET /admin/api/method-analysis/user?userId=...`
+  - `GET /telegram/admin/api/method-analysis/summary?period=30d|90d`
+  - `GET /telegram/admin/api/method-analysis/search-users?q=keyword`
+  - `GET /telegram/admin/api/method-analysis/user?userId=...`
 - Security:
   - Tailscale internal access only (`ADMIN_ALLOWED_IP_PREFIX`)
   - Basic Auth (`ADMIN_DASH_USER`, `ADMIN_DASH_PASS`)
@@ -223,7 +224,7 @@ remindtest - 手動補發提醒（測試用）
 
 ## Telegram admin / dashboard behavior
 
-- `/admin/method-analysis` shows:
+- `/telegram/admin/method-analysis` shows:
   - community method mix for 30d / 90d
   - user search
   - individual 30d / 90d method mix tables

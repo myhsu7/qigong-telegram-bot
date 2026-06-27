@@ -75,7 +75,7 @@
     };
 
     const loadSummary = async (period) => {
-      const res = await fetch(`/admin/api/method-analysis/summary?period=${period}`);
+      const res = await fetch(`/telegram/admin/api/method-analysis/summary?period=${period}`);
       const data = await res.json();
       const labels = data.methods.map((m) => m.methodName);
       const values = data.methods.map((m) => m.matchedDays);
@@ -94,7 +94,7 @@
 
     document.getElementById('search').onclick = async () => {
       const q = document.getElementById('query').value.trim();
-      const res = await fetch(`/admin/api/method-analysis/search-users?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/telegram/admin/api/method-analysis/search-users?q=${encodeURIComponent(q)}`);
       const users = await res.json();
       const results = document.getElementById('results');
       results.innerHTML = '';
@@ -105,7 +105,7 @@
         a.onclick = async (e) => {
           e.preventDefault();
           document.getElementById('userTitle').textContent = `個人分析：${u.displayName}`;
-          const res = await fetch(`/admin/api/method-analysis/user?userId=${u.telegramUserId}`);
+          const res = await fetch(`/telegram/admin/api/method-analysis/user?userId=${u.telegramUserId}`);
           const data = await res.json();
           renderMethodTable(document.getElementById('table30'), data.analysis30);
           renderMethodTable(document.getElementById('table90'), data.analysis90);

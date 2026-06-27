@@ -101,8 +101,8 @@
     const load = async () => {
       try {
         const [methodsResp, todayResp] = await Promise.all([
-          apiFetch('/api/webapp/practice-methods'),
-          apiFetch('/api/webapp/checkin/today')
+          apiFetch('/telegram/api/webapp/practice-methods'),
+          apiFetch('/telegram/api/webapp/checkin/today')
         ]);
 
         renderMethods(methodsResp.methods, todayResp.selectedMethodIds);
@@ -129,7 +129,7 @@
       setStatus(submitStatus, '正在儲存打卡資料...');
 
       try {
-        const result = await apiFetch('/api/webapp/checkin', {
+        const result = await apiFetch('/telegram/api/webapp/checkin', {
           method: 'POST',
           body: JSON.stringify({
             methodIds,

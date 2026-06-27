@@ -1,0 +1,39 @@
+# Example Caddyfile for sharing one public funnel/domain
+# between qigong-line-bot (:3000) and qigong-telegram-bot (:3001)
+
+:8080 {
+    # LINE bot
+    handle_path /webhook {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle_path /admin-dashboard* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle_path /api/admin* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    # Telegram bot
+    handle_path /telegram/webhook/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle_path /telegram/webapp/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle_path /telegram/api/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle_path /telegram/admin* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    # health root
+    handle {
+        respond "shared funnel reverse proxy is running" 200
+    }
+}

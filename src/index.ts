@@ -17,18 +17,18 @@ app.get('/', (req, res) => {
     res.json({
         ok: true,
         service: 'qigong-telegram-bot',
-        webapp: '/webapp/checkin'
+        webapp: '/telegram/webapp/checkin'
     });
 });
 
 app.post(`/telegram/webhook/${env.telegramWebhookSecret}`, telegramWebhook);
-app.use('/webapp', webappRoutes);
-app.use('/api/webapp', apiRoutes);
-app.use('/admin', requireTailscaleInternal, requireAdminBasicAuth, adminRoutes);
+app.use('/telegram/webapp', webappRoutes);
+app.use('/telegram/api/webapp', apiRoutes);
+app.use('/telegram/admin', requireTailscaleInternal, requireAdminBasicAuth, adminRoutes);
 
 app.listen(env.port, () => {
     console.log(`[telegram-bot] server listening on port ${env.port}`);
     console.log(`[telegram-bot] webhook path: /telegram/webhook/${env.telegramWebhookSecret}`);
-    console.log(`[telegram-bot] webapp path: /webapp/checkin`);
+    console.log(`[telegram-bot] webapp path: /telegram/webapp/checkin`);
     setupReminderCron();
 });

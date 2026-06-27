@@ -25,9 +25,9 @@
   <div class="layout">
     <aside class="sidebar">
       <h2 style="margin-top:0;">Telegram Admin</h2>
-      <a href="/admin" class="active">總覽</a>
-      <a href="/admin/leaderboard">排行榜</a>
-      <a href="/admin/method-analysis">功法分析</a>
+      <a href="/telegram/admin" class="active">總覽</a>
+      <a href="/telegram/admin/leaderboard">排行榜</a>
+      <a href="/telegram/admin/method-analysis">功法分析</a>
     </aside>
     <main class="content">
       <div class="row">
@@ -58,7 +58,7 @@
     const buttons = [...document.querySelectorAll('[data-period]')];
     const setActive = () => buttons.forEach(btn => btn.className = btn.dataset.period === currentPeriod ? '' : 'ghost');
     const load = async () => {
-      const res = await fetch(`/admin/api/overview?period=${currentPeriod}`);
+      const res = await fetch(`/telegram/admin/api/overview?period=${currentPeriod}`);
       const data = await res.json();
       document.getElementById('activeUsers').textContent = data.kpis.activeUsers;
       document.getElementById('totalCheckins').textContent = data.kpis.totalCheckins;

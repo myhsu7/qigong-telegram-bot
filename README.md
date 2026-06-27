@@ -122,6 +122,17 @@ remindtest - 手動補發提醒（測試用）
 - `GET /api/webapp/checkin/today`
 - `POST /api/webapp/checkin`
 
+## Admin Method Analysis (read-only)
+
+- Route: `GET /admin/method-analysis`
+- APIs:
+  - `GET /admin/api/method-analysis/summary?period=30d|90d`
+  - `GET /admin/api/method-analysis/search-users?q=keyword`
+  - `GET /admin/api/method-analysis/user?userId=...`
+- Security:
+  - Tailscale internal access only (`ADMIN_ALLOWED_IP_PREFIX`)
+  - Basic Auth (`ADMIN_DASH_USER`, `ADMIN_DASH_PASS`)
+
 ## Current structured check-in behavior
 
 - User opens Telegram Web App from `/checkin`
@@ -141,6 +152,14 @@ remindtest - 手動補發提醒（測試用）
 - `/leaderboard` shows all-time totals and longest streaks
 - `/weekly`, `/monthly`, `/quarterly`, `/yearly` show period leaderboards
 - `/method30` and `/method90` show structured method mix analysis based on selected practice methods
+
+## Telegram admin / dashboard behavior
+
+- `/admin/method-analysis` shows:
+  - community method mix for 30d / 90d
+  - user search
+  - individual 30d / 90d method mix tables
+- This page is intended for coaches/admins only and does not send any message to users
 
 ## Reminder behavior
 

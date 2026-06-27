@@ -5,6 +5,8 @@ import { telegramWebhook } from './bot/telegram';
 import webappRoutes from './routes/webapp';
 import apiRoutes from './routes/api';
 import { setupReminderCron } from './services/reminders';
+import { requireAdminBasicAuth, requireTailscaleInternal } from './middleware/adminSecurity';
+import adminRoutes from './routes/admin';
 
 const app = express();
 
@@ -22,6 +24,7 @@ app.get('/', (req, res) => {
 app.post(`/telegram/webhook/${env.telegramWebhookSecret}`, telegramWebhook);
 app.use('/webapp', webappRoutes);
 app.use('/api/webapp', apiRoutes);
+app.use('/admin', requireTailscaleInternal, requireAdminBasicAuth, adminRoutes);
 
 app.listen(env.port, () => {
     console.log(`[telegram-bot] server listening on port ${env.port}`);

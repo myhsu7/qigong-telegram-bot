@@ -1,0 +1,51 @@
+# Final shared-funnel Caddyfile for ubuntu1
+#
+# Public entrypoint:
+#   tailscale funnel 8080
+#
+# Upstreams:
+#   LINE bot      -> 127.0.0.1:3000
+#   Telegram bot  -> 127.0.0.1:3001
+
+:8080 {
+    # -----------------------------
+    # LINE bot routes
+    # -----------------------------
+    handle /webhook {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle /admin-dashboard* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle /api/admin* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    # -----------------------------
+    # Telegram bot routes
+    # -----------------------------
+    handle /telegram/webhook/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle /telegram/webapp/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle /telegram/api/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle /telegram/admin* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    # -----------------------------
+    # Health / fallback
+    # -----------------------------
+    handle {
+        respond "shared funnel reverse proxy is running" 200
+    }
+}

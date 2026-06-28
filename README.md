@@ -98,6 +98,35 @@ If you are deploying on your home Ubuntu server and want Telegram to reach the b
 tailscale funnel 3001
 ```
 
+If you want LINE and Telegram to share the same public Tailscale Funnel endpoint on `ubuntu1`, use a reverse proxy instead:
+
+1. Copy `docs/ubuntu1.Caddyfile` to `/etc/caddy/Caddyfile`
+2. Validate it:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+```
+
+3. Restart Caddy:
+
+```bash
+sudo systemctl restart caddy
+```
+
+4. Funnel the proxy instead of either bot directly:
+
+```bash
+tailscale funnel 8080
+```
+
+In that setup, Telegram must use the namespaced routes already built into this repo:
+
+```ini
+PUBLIC_BASE_URL=https://ubuntu1.tailbf9b8d.ts.net
+TELEGRAM_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/checkin
+TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/achievements
+```
+
 Use the resulting public HTTPS URL as `PUBLIC_BASE_URL`, for example:
 
 ```ini

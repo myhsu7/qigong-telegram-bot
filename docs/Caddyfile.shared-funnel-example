@@ -3,32 +3,32 @@
 
 :8080 {
     # LINE bot
-    handle_path /webhook {
+    handle /webhook {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle_path /admin-dashboard* {
+    handle /admin-dashboard* {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle_path /api/admin* {
+    handle /api/admin* {
         reverse_proxy 127.0.0.1:3000
     }
 
     # Telegram bot
-    handle_path /telegram/webhook/* {
+    handle /telegram/webhook/* {
         reverse_proxy 127.0.0.1:3001
     }
 
-    handle_path /telegram/webapp/* {
+    handle /telegram/webapp/* {
         reverse_proxy 127.0.0.1:3001
     }
 
-    handle_path /telegram/api/* {
+    handle /telegram/api/* {
         reverse_proxy 127.0.0.1:3001
     }
 
-    handle_path /telegram/admin* {
+    handle /telegram/admin* {
         reverse_proxy 127.0.0.1:3001
     }
 

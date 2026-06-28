@@ -151,31 +151,31 @@ sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
 
 ```caddy
 :8080 {
-    handle_path /webhook {
+    handle /webhook {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle_path /admin-dashboard* {
+    handle /admin-dashboard* {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle_path /api/admin* {
+    handle /api/admin* {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle_path /telegram/webhook/* {
+    handle /telegram/webhook/* {
         reverse_proxy 127.0.0.1:3001
     }
 
-    handle_path /telegram/webapp/* {
+    handle /telegram/webapp/* {
         reverse_proxy 127.0.0.1:3001
     }
 
-    handle_path /telegram/api/* {
+    handle /telegram/api/* {
         reverse_proxy 127.0.0.1:3001
     }
 
-    handle_path /telegram/admin* {
+    handle /telegram/admin* {
         reverse_proxy 127.0.0.1:3001
     }
 
@@ -184,6 +184,9 @@ sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
     }
 }
 ```
+
+> 重要：這裡要用 `handle`，**不要用 `handle_path`**。  
+> `handle_path /webhook` 會把 `/webhook` 前綴剝掉，導致 LINE app 實際收到 `/`，進而讓 LINE webhook 驗證失敗並出現 `404 Not Found`。
 
 ### 4. 驗證設定
 

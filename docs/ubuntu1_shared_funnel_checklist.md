@@ -47,9 +47,9 @@ Qigong LINE Bot is running.
 
 ### 3. 確認 LINE 相關路徑規劃
 
-- Webhook: `/webhook`
-- Admin Dashboard: `/admin-dashboard`
-- Admin API: `/api/admin/*`
+- Webhook: `/line/webhook`
+- Admin Dashboard: `/line/admin-dashboard`
+- Admin API: `/line/api/admin/*`
 
 ---
 
@@ -151,15 +151,15 @@ sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
 
 ```caddy
 :8080 {
-    handle /webhook {
+    handle /line/webhook {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle /admin-dashboard* {
+    handle /line/admin-dashboard* {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle /api/admin* {
+    handle /line/api/admin* {
         reverse_proxy 127.0.0.1:3000
     }
 
@@ -206,7 +206,7 @@ sudo systemctl status caddy
 
 ```bash
 curl http://127.0.0.1:8080/
-curl http://127.0.0.1:8080/webhook
+curl http://127.0.0.1:8080/line/webhook
 curl http://127.0.0.1:8080/telegram/webapp/checkin
 curl http://127.0.0.1:8080/telegram/admin
 ```
@@ -248,7 +248,7 @@ tailscale funnel status
 - Webhook URL:
 
 ```text
-https://ubuntu1.tailbf9b8d.ts.net/webhook
+https://ubuntu1.tailbf9b8d.ts.net/line/webhook
 ```
 
 ### 2. 驗證
@@ -261,7 +261,7 @@ https://ubuntu1.tailbf9b8d.ts.net/webhook
 - 1 對 1 聊天室 `✅ Check-In`
 - `🏆 Weekly Leaderboard`
 - `📊 My Stats`
-- `https://ubuntu1.tailbf9b8d.ts.net/admin-dashboard`
+- `https://ubuntu1.tailbf9b8d.ts.net/line/admin-dashboard`
 
 ---
 

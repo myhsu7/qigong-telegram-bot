@@ -11,15 +11,15 @@
     # -----------------------------
     # LINE bot routes
     # -----------------------------
-    handle /webhook {
+    handle /line/webhook {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle /admin-dashboard* {
+    handle /line/admin-dashboard* {
         reverse_proxy 127.0.0.1:3000
     }
 
-    handle /api/admin* {
+    handle /line/api/admin* {
         reverse_proxy 127.0.0.1:3000
     }
 

@@ -50,6 +50,8 @@ Qigong LINE Bot is running.
 - Webhook: `/line/webhook`
 - Admin Dashboard: `/line/admin-dashboard`
 - Admin API: `/line/api/admin/*`
+- LIFF Page: `/line/liff/*`
+- LIFF API: `/line/api/liff/*`
 
 ---
 
@@ -160,6 +162,14 @@ sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
     }
 
     handle /line/api/admin* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle /line/liff/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle /line/api/liff/* {
         reverse_proxy 127.0.0.1:3000
     }
 

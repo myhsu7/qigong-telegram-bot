@@ -23,6 +23,14 @@
         reverse_proxy 127.0.0.1:3000
     }
 
+    handle /line/liff/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    handle /line/api/liff/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+
     # -----------------------------
     # Telegram bot routes
     # -----------------------------

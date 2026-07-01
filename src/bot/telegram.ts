@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
+import { Bot, InlineKeyboard, Keyboard, webhookCallback } from 'grammy';
 import { env } from '../config/env';
 import { upsertTelegramUser } from '../services/checkin';
 import { buildBadgesMessage, buildEnhancedUserStatsMessage, buildLeaderboardMessage, getUserStats } from '../services/stats';
@@ -45,16 +45,20 @@ const ensureUser = async (ctx: any) => {
 
 const openCheckinWebApp = async (ctx: any) => {
     await ensureUser(ctx);
-    const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
+    const keyboard = new Keyboard()
+        .webApp('✅ 開始打卡', env.telegramWebappUrl)
+        .resized()
+        .oneTime();
     await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
 };
 
 bot.command('start', async (ctx) => {
     await ensureUser(ctx);
-    const keyboard = new InlineKeyboard()
+    const keyboard = new Keyboard()
         .webApp('✅ 開始打卡', env.telegramWebappUrl)
         .row()
-        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
+        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl)
+        .resized();
 
     await ctx.reply(
         [

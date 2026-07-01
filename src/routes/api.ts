@@ -4,7 +4,7 @@ import { getPracticeMethods, getTodayCheckin, saveTodayCheckin, upsertTelegramUs
 import { getLevelTitle, getUserStats } from '../services/stats';
 import { evaluateTelegramBadges } from '../services/badges';
 import { getUserBadges } from '../services/badges';
-import { sendTelegramCheckinSummary } from '../bot/telegram';
+import { sendTelegramCheckinSummary } from '../services/chatSummary';
 
 const router = Router();
 

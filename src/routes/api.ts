@@ -40,7 +40,13 @@ router.post('/checkin', async (req, res) => {
         const auth = verifyTelegramWebAppInitData(initData);
         await upsertTelegramUser(auth.user);
 
-        const methodIds = Array.isArray(req.body?.methodIds) ? req.body.methodIds.map((id: unknown) => Number(id)) : [];
+        const methodIds: number[] = Array.isArray(req.body?.methodIds)
+            ? Array.from(new Set(
+                req.body.methodIds
+                    .map((id: unknown) => Number(id))
+                    .filter((id: number) => Number.isFinite(id) && id > 0)
+            ))
+            : [];
         const reflectionNote = typeof req.body?.reflectionNote === 'string' ? req.body.reflectionNote : '';
         const bodyFeelingNote = typeof req.body?.bodyFeelingNote === 'string' ? req.body.bodyFeelingNote : '';
 

@@ -12,7 +12,16 @@
     h1 { font-size: 24px; margin: 0 0 8px; }
     h2 { font-size: 16px; margin: 0 0 12px; }
     .muted { color: #6b7280; font-size: 14px; }
-    .method { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+    .method-group { border-bottom: 1px solid #f3f4f6; padding: 6px 0; }
+    .method-group:last-child { border-bottom: 0; }
+    .method-row { display: flex; align-items: center; gap: 10px; }
+    .method-label { display: flex; align-items: center; gap: 10px; flex: 1; padding: 8px 0; }
+    .toggle-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; color: #374151; font-size: 18px; line-height: 1; padding: 0; flex-shrink: 0; }
+    .toggle-spacer { width: 30px; height: 30px; flex-shrink: 0; }
+    .child-list { margin-left: 40px; padding-bottom: 4px; }
+    .child-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+    .child-label { display: flex; align-items: center; gap: 10px; flex: 1; color: #4b5563; }
+    .method-hint { color: #9ca3af; font-size: 12px; }
     textarea { width: 100%; min-height: 96px; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px; font-size: 14px; box-sizing: border-box; }
     button { width: 100%; background: #0d6efd; color: #fff; border: 0; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
     button:disabled { background: #9ca3af; }
@@ -62,6 +71,9 @@
     const submitButton = document.getElementById('submitButton');
     const submitStatus = document.getElementById('submitStatus');
     const todayStatus = document.getElementById('todayStatus');
+    let practiceMethods = [];
+    let selectedMethodIds = new Set();
+    let expandedMethodIds = new Set();
 
     const initData = tg?.initData || '';
 
@@ -84,19 +96,187 @@
       return res.json();
     };
 
-    const renderMethods = (methods, selectedIds = []) => {
-      methodsContainer.innerHTML = '';
+    const normalizeSelectedIds = (methods, selectedIds) => {
+      const normalized = new Set();
+      const incoming = new Set(selectedIds);
+
       methods.forEach((method) => {
+        if (method.children && method.children.length > 0) {
+          if (incoming.has(method.id)) {
+            method.children.forEach((child) => normalized.add(child.id));
+          }
+          method.children.forEach((child) => {
+            if (incoming.has(child.id)) normalized.add(child.id);
+          });
+          return;
+        }
+
+        if (incoming.has(method.id)) {
+          normalized.add(method.id);
+        }
+      });
+
+      return normalized;
+    };
+
+    const getParentSelectionState = (method) => {
+      if (!method.children || method.children.length === 0) {
+        return { checked: selectedMethodIds.has(method.id), indeterminate: false };
+      }
+
+      const selectedCount = method.children.filter((child) => selectedMethodIds.has(child.id)).length;
+      return {
+        checked: selectedCount === method.children.length,
+        indeterminate: selectedCount > 0 && selectedCount < method.children.length
+      };
+    };
+
+    const redrawMethods = () => {
+      methodsContainer.innerHTML = '';
+      practiceMethods.forEach((method) => {
+        const group = document.createElement('div');
+        group.className = 'method-group';
+
+        const row = document.createElement('div');
+        row.className = 'method-row';
+
+        if (method.children && method.children.length > 0) {
+          const toggleButton = document.createElement('button');
+          toggleButton.type = 'button';
+          toggleButton.className = 'toggle-btn';
+          toggleButton.dataset.action = 'toggle';
+          toggleButton.dataset.methodId = String(method.id);
+          toggleButton.textContent = expandedMethodIds.has(method.id) ? '−' : '+';
+          row.appendChild(toggleButton);
+        } else {
+          const spacer = document.createElement('span');
+          spacer.className = 'toggle-spacer';
+          row.appendChild(spacer);
+        }
+
         const label = document.createElement('label');
-        label.className = 'method';
-        label.innerHTML = `<input type="checkbox" name="methods" value="${method.id}" ${selectedIds.includes(method.id) ? 'checked' : ''}> ${method.nameZh}`;
-        methodsContainer.appendChild(label);
+        label.className = 'method-label';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.action = 'parent-check';
+        checkbox.dataset.methodId = String(method.id);
+
+        const state = getParentSelectionState(method);
+        checkbox.checked = state.checked;
+        checkbox.indeterminate = state.indeterminate;
+
+        const textWrap = document.createElement('div');
+        textWrap.innerHTML = method.children && method.children.length > 0
+          ? `${method.nameZh} <span class="method-hint">勾選即全選子招式</span>`
+          : method.nameZh;
+
+        label.appendChild(checkbox);
+        label.appendChild(textWrap);
+        row.appendChild(label);
+        group.appendChild(row);
+
+        if (method.children && method.children.length > 0 && expandedMethodIds.has(method.id)) {
+          const childList = document.createElement('div');
+          childList.className = 'child-list';
+
+          method.children.forEach((child) => {
+            const childRow = document.createElement('div');
+            childRow.className = 'child-row';
+
+            const childLabel = document.createElement('label');
+            childLabel.className = 'child-label';
+
+            const childCheckbox = document.createElement('input');
+            childCheckbox.type = 'checkbox';
+            childCheckbox.dataset.action = 'child-check';
+            childCheckbox.dataset.methodId = String(child.id);
+            childCheckbox.checked = selectedMethodIds.has(child.id);
+
+            const childText = document.createElement('span');
+            childText.textContent = child.nameZh;
+
+            childLabel.appendChild(childCheckbox);
+            childLabel.appendChild(childText);
+            childRow.appendChild(childLabel);
+            childList.appendChild(childRow);
+          });
+
+          group.appendChild(childList);
+        }
+
+        methodsContainer.appendChild(group);
       });
     };
 
     const getSelectedMethodIds = () => {
-      return [...document.querySelectorAll('input[name="methods"]:checked')].map((el) => Number(el.value));
+      const ids = [];
+      practiceMethods.forEach((method) => {
+        if (method.children && method.children.length > 0) {
+          method.children.forEach((child) => {
+            if (selectedMethodIds.has(child.id)) ids.push(child.id);
+          });
+        } else if (selectedMethodIds.has(method.id)) {
+          ids.push(method.id);
+        }
+      });
+      return ids;
     };
+
+    const renderMethods = (methods, selectedIds = []) => {
+      practiceMethods = methods;
+      selectedMethodIds = normalizeSelectedIds(methods, selectedIds);
+      expandedMethodIds = new Set(methods.filter((method) => {
+        if (!method.children || method.children.length === 0) return false;
+        return method.children.some((child) => selectedMethodIds.has(child.id)) || selectedIds.includes(method.id);
+      }).map((method) => method.id));
+      redrawMethods();
+    };
+
+    methodsContainer.addEventListener('click', (event) => {
+      const toggleButton = event.target.closest('button[data-action="toggle"]');
+      if (!toggleButton) return;
+
+      const methodId = Number(toggleButton.dataset.methodId);
+      if (expandedMethodIds.has(methodId)) {
+        expandedMethodIds.delete(methodId);
+      } else {
+        expandedMethodIds.add(methodId);
+      }
+      redrawMethods();
+    });
+
+    methodsContainer.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+
+      if (target.dataset.action === 'parent-check') {
+        const methodId = Number(target.dataset.methodId);
+        const method = practiceMethods.find((item) => item.id === methodId);
+        if (!method) return;
+
+        if (method.children && method.children.length > 0) {
+          method.children.forEach((child) => {
+            if (target.checked) selectedMethodIds.add(child.id);
+            else selectedMethodIds.delete(child.id);
+          });
+        } else if (target.checked) {
+          selectedMethodIds.add(method.id);
+        } else {
+          selectedMethodIds.delete(method.id);
+        }
+
+        redrawMethods();
+        return;
+      }
+
+      if (target.dataset.action === 'child-check') {
+        const methodId = Number(target.dataset.methodId);
+        if (target.checked) selectedMethodIds.add(methodId);
+        else selectedMethodIds.delete(methodId);
+        redrawMethods();
+      }
+    });
 
     const load = async () => {
       try {

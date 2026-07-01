@@ -10,6 +10,9 @@ export interface PracticeMethod {
     nameZh: string;
     nameEn: string | null;
     estimatedMinutes: number | null;
+    parentId: number | null;
+    methodType: 'group' | 'leaf';
+    children: PracticeMethod[];
 }
 
 export interface TodayCheckinResponse {
@@ -37,19 +40,44 @@ export const upsertTelegramUser = async (user: TelegramWebAppUser) => {
 
 export const getPracticeMethods = async (): Promise<PracticeMethod[]> => {
     const { rows } = await db.query(
-        `SELECT id, code, name_zh, name_en, estimated_minutes
+        `SELECT id, code, name_zh, name_en, estimated_minutes, parent_id, method_type
          FROM practice_methods
          WHERE is_active = TRUE
          ORDER BY sort_order ASC, id ASC`
     );
 
-    return rows.map((row) => ({
-        id: row.id,
-        code: row.code,
-        nameZh: row.name_zh,
-        nameEn: row.name_en,
-        estimatedMinutes: row.estimated_minutes
-    }));
+    const methodMap = new Map<number, PracticeMethod>();
+
+    rows.forEach((row) => {
+        methodMap.set(row.id, {
+            id: row.id,
+            code: row.code,
+            nameZh: row.name_zh,
+            nameEn: row.name_en,
+            estimatedMinutes: row.estimated_minutes,
+            parentId: row.parent_id,
+            methodType: row.method_type === 'group' ? 'group' : 'leaf',
+            children: []
+        });
+    });
+
+    const roots: PracticeMethod[] = [];
+    rows.forEach((row) => {
+        const method = methodMap.get(row.id);
+        if (!method) return;
+
+        if (row.parent_id) {
+            const parent = methodMap.get(row.parent_id);
+            if (parent) {
+                parent.children.push(method);
+                return;
+            }
+        }
+
+        roots.push(method);
+    });
+
+    return roots;
 };
 
 export const getTodayCheckin = async (telegramUserId: number): Promise<TodayCheckinResponse> => {
@@ -118,7 +146,7 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         await client.query('BEGIN');
 
         const methodRows = await client.query(
-            `SELECT id, name_zh
+            `SELECT id, name_zh, method_type
              FROM practice_methods
              WHERE id = ANY($1::int[]) AND is_active = TRUE
              ORDER BY sort_order ASC, id ASC`,
@@ -127,6 +155,10 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
 
         if (methodRows.rows.length !== methodIds.length) {
             throw new Error('One or more selected practice methods are invalid');
+        }
+
+        if (methodRows.rows.some((row) => row.method_type !== 'leaf')) {
+            throw new Error('Only leaf practice methods can be selected');
         }
 
         const methodNames = methodRows.rows.map((row) => row.name_zh);

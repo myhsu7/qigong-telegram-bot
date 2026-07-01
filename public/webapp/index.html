@@ -328,6 +328,19 @@
         if (tg?.HapticFeedback) {
           tg.HapticFeedback.notificationOccurred('success');
         }
+
+        if (tg?.sendData) {
+          tg.sendData(JSON.stringify({
+            type: 'checkin_summary',
+            selectedMethods: result.selectedMethods || [],
+            stats: result.stats || null,
+            unlockedBadges: result.unlockedBadges || []
+          }));
+          if (tg.close) {
+            tg.close();
+            return;
+          }
+        }
       } catch (error) {
         setStatus(submitStatus, `儲存失敗：${error.message}`, 'error');
       } finally {

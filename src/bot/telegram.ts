@@ -7,6 +7,31 @@ import { sendDailyTelegramReminder } from '../services/reminders';
 
 export const bot = new Bot(env.telegramBotToken);
 
+const buildWebAppCheckinSummary = (payload: any) => {
+    const methods = Array.isArray(payload?.selectedMethods) ? payload.selectedMethods.filter((item: unknown) => typeof item === 'string' && item.trim()) : [];
+    const summaryLines = [
+        '✅ 打卡成功',
+        '',
+        `今日功法：${methods.join('、')}`
+    ];
+
+    if (payload?.stats) {
+        summaryLines.push(`🔥 連續打卡：${payload.stats.currentStreak || 0} 天`);
+        summaryLines.push(`⭐ 總打卡天數：${payload.stats.totalCheckins || 0} 天`);
+    }
+
+    if (Array.isArray(payload?.unlockedBadges) && payload.unlockedBadges.length > 0) {
+        summaryLines.push('');
+        summaryLines.push('🎉 新解鎖成就：');
+        payload.unlockedBadges.forEach((badge: any) => {
+            const yearText = badge?.earnedYear && badge.earnedYear !== 0 ? ` (${badge.earnedYear}年)` : '';
+            summaryLines.push(`${badge?.emoji || '🏅'} ${badge?.name || '新勳章'}${yearText}`);
+        });
+    }
+
+    return summaryLines.join('\n');
+};
+
 const ensureUser = async (ctx: any) => {
     if (!ctx.from) return;
     await upsertTelegramUser({
@@ -116,6 +141,20 @@ bot.command('remindtest', async (ctx) => {
     await ensureUser(ctx);
     const result = await sendDailyTelegramReminder();
     await ctx.reply(`補發提醒完成：${result.success}/${result.total}`);
+});
+
+bot.on('message:web_app_data', async (ctx) => {
+    try {
+        const raw = ctx.message?.web_app_data?.data;
+        if (!raw) return;
+
+        const payload = JSON.parse(raw);
+        if (payload?.type !== 'checkin_summary') return;
+
+        await ctx.reply(buildWebAppCheckinSummary(payload));
+    } catch (error) {
+        console.error('[telegram-bot] failed to process web_app_data', error);
+    }
 });
 
 export const telegramWebhook = webhookCallback(bot, 'express');

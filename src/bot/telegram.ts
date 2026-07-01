@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard, Keyboard, webhookCallback } from 'grammy';
+import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
 import { env } from '../config/env';
 import { upsertTelegramUser } from '../services/checkin';
 import { buildBadgesMessage, buildEnhancedUserStatsMessage, buildLeaderboardMessage, getUserStats } from '../services/stats';
@@ -7,7 +7,7 @@ import { sendDailyTelegramReminder } from '../services/reminders';
 
 export const bot = new Bot(env.telegramBotToken);
 
-const buildWebAppCheckinSummary = (payload: any) => {
+export const buildWebAppCheckinSummary = (payload: any) => {
     const methods = Array.isArray(payload?.selectedMethods) ? payload.selectedMethods.filter((item: unknown) => typeof item === 'string' && item.trim()) : [];
     const summaryLines = [
         '✅ 打卡成功',
@@ -43,22 +43,22 @@ const ensureUser = async (ctx: any) => {
     });
 };
 
+export const sendTelegramCheckinSummary = async (chatId: number, payload: any) => {
+    await bot.api.sendMessage(chatId, buildWebAppCheckinSummary(payload));
+};
+
 const openCheckinWebApp = async (ctx: any) => {
     await ensureUser(ctx);
-    const keyboard = new Keyboard()
-        .webApp('✅ 開始打卡', env.telegramWebappUrl)
-        .resized()
-        .oneTime();
+    const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
     await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
 };
 
 bot.command('start', async (ctx) => {
     await ensureUser(ctx);
-    const keyboard = new Keyboard()
+    const keyboard = new InlineKeyboard()
         .webApp('✅ 開始打卡', env.telegramWebappUrl)
         .row()
-        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl)
-        .resized();
+        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
 
     await ctx.reply(
         [

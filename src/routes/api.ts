@@ -4,6 +4,7 @@ import { getPracticeMethods, getTodayCheckin, saveTodayCheckin, upsertTelegramUs
 import { getLevelTitle, getUserStats } from '../services/stats';
 import { evaluateTelegramBadges } from '../services/badges';
 import { getUserBadges } from '../services/badges';
+import { sendTelegramCheckinSummary } from '../bot/telegram';
 
 const router = Router();
 
@@ -53,6 +54,15 @@ router.post('/checkin', async (req, res) => {
         const saved = await saveTodayCheckin(auth.user.id, methodIds, reflectionNote, bodyFeelingNote);
         const unlockedBadges = saved.alreadyCheckedIn ? [] : await evaluateTelegramBadges(auth.user.id, saved.selectedMethods);
         const stats = await getUserStats(auth.user.id);
+        try {
+            await sendTelegramCheckinSummary(auth.user.id, {
+                selectedMethods: saved.selectedMethods,
+                stats,
+                unlockedBadges
+            });
+        } catch (summaryError) {
+            console.error('[api] failed to send check-in summary to Telegram chat', summaryError);
+        }
         res.json({ ok: true, ...saved, stats, unlockedBadges });
     } catch (error) {
         console.error('[api] failed to save today checkin', error);

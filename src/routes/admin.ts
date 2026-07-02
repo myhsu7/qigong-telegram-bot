@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import path from 'path';
 import { getCommunityMethodMix, getUserMethodMix, getUserPracticeJournal, searchTelegramUsers } from '../services/methodAnalysis';
-import { getLeaderboard, getOverviewStats } from '../services/stats';
+import { getLeaderboard, getOverviewStats, getTodayCheckedInUsers, getTodayPendingUsers } from '../services/stats';
 
 const router = Router();
 
@@ -82,6 +82,36 @@ router.get('/api/method-analysis/user', async (req, res) => {
     } catch (error) {
         console.error('[admin] user analysis failed', error);
         res.status(500).json({ error: 'Failed to load user analysis' });
+    }
+});
+
+const parsePage = (req: Request) => {
+    const page = parseInt((req.query.page as string) || '1', 10);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+};
+
+const parseLimit = (req: Request) => {
+    const limit = parseInt((req.query.limit as string) || '20', 10);
+    return Number.isFinite(limit) && limit > 0 && limit <= 100 ? limit : 20;
+};
+
+router.get('/api/today-checkins', async (req, res) => {
+    try {
+        const data = await getTodayCheckedInUsers(parsePage(req), parseLimit(req));
+        res.json(data);
+    } catch (error) {
+        console.error('[admin] today-checkins failed', error);
+        res.status(500).json({ error: 'Failed to load today checkins' });
+    }
+});
+
+router.get('/api/today-pending', async (req, res) => {
+    try {
+        const data = await getTodayPendingUsers(parsePage(req), parseLimit(req));
+        res.json(data);
+    } catch (error) {
+        console.error('[admin] today-pending failed', error);
+        res.status(500).json({ error: 'Failed to load today pending' });
     }
 });
 

@@ -242,6 +242,95 @@ export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>
     };
 };
 
+export interface TodayCheckinUser {
+    telegramUserId: number;
+    displayName: string;
+}
+
+export interface TodayCheckinPage {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    users: TodayCheckinUser[];
+}
+
+const getTodayDateStr = () => moment().tz(TIMEZONE).format('YYYY-MM-DD');
+
+export const getTodayCheckedInUsers = async (page = 1, limit = 20): Promise<TodayCheckinPage> => {
+    const today = getTodayDateStr();
+    const offset = (page - 1) * limit;
+
+    const countRes = await db.query(
+        `SELECT COUNT(DISTINCT telegram_user_id) AS total
+         FROM telegram_checkin_logs
+         WHERE checkin_date = $1`,
+        [today]
+    );
+    const total = parseInt(countRes.rows[0]?.total || '0', 10);
+
+    const { rows } = await db.query(
+        `SELECT u.telegram_user_id, u.first_name, u.last_name, u.username
+         FROM telegram_users u
+         JOIN telegram_checkin_logs l ON l.telegram_user_id = u.telegram_user_id
+         WHERE l.checkin_date = $1
+         GROUP BY u.telegram_user_id, u.first_name, u.last_name, u.username
+         ORDER BY MAX(l.created_at) DESC
+         LIMIT $2 OFFSET $3`,
+        [today, limit, offset]
+    );
+
+    return {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        users: rows.map((row) => ({
+            telegramUserId: Number(row.telegram_user_id),
+            displayName: getDisplayName(row)
+        }))
+    };
+};
+
+export const getTodayPendingUsers = async (page = 1, limit = 20): Promise<TodayCheckinPage> => {
+    const today = getTodayDateStr();
+    const offset = (page - 1) * limit;
+
+    const countRes = await db.query(
+        `SELECT COUNT(*) AS total
+         FROM telegram_users u
+         WHERE NOT EXISTS (
+             SELECT 1 FROM telegram_checkin_logs l
+             WHERE l.telegram_user_id = u.telegram_user_id AND l.checkin_date = $1
+         )`,
+        [today]
+    );
+    const total = parseInt(countRes.rows[0]?.total || '0', 10);
+
+    const { rows } = await db.query(
+        `SELECT u.telegram_user_id, u.first_name, u.last_name, u.username
+         FROM telegram_users u
+         WHERE NOT EXISTS (
+             SELECT 1 FROM telegram_checkin_logs l
+             WHERE l.telegram_user_id = u.telegram_user_id AND l.checkin_date = $1
+         )
+         ORDER BY u.first_name ASC, u.telegram_user_id ASC
+         LIMIT $2 OFFSET $3`,
+        [today, limit, offset]
+    );
+
+    return {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        users: rows.map((row) => ({
+            telegramUserId: Number(row.telegram_user_id),
+            displayName: getDisplayName(row)
+        }))
+    };
+};
+
 export const buildUserStatsMessage = (stats: UserStats) => {
     if (stats.totalCheckins === 0) {
         return '你目前還沒有打卡紀錄，先用 /checkin 開始今天的練功吧！';

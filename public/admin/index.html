@@ -19,6 +19,25 @@
     .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
     button{padding:10px 14px;border:0;background:#0d6efd;color:#fff;border-radius:10px;cursor:pointer}
     .ghost{background:#e5e7eb;color:#111827}
+    .today-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+    .today-card{border-radius:14px;padding:20px;cursor:pointer;transition:box-shadow .2s}
+    .today-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.12)}
+    .today-card .label{font-size:13px;text-transform:uppercase;font-weight:700;color:#6b7280}
+    .today-card .value{font-size:30px;font-weight:800;margin-top:8px}
+    .today-card.checked{background:#ecfdf5;border:1px solid #a7f3d0}
+    .today-card.checked .value{color:#059669}
+    .today-card.pending{background:#fef3c7;border:1px solid #fde68a}
+    .today-card.pending .value{color:#d97706}
+    .user-panel{display:none;margin-top:16px}
+    .user-panel.active{display:block}
+    .user-list{display:flex;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto}
+    .user-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px}
+    .user-link{color:#0d6efd;text-decoration:none;font-weight:600}
+    .user-link:hover{text-decoration:underline}
+    .pager{display:flex;align-items:center;gap:8px;margin-top:12px}
+    .pager button{padding:6px 12px;font-size:14px}
+    .pager .info{color:#6b7280;font-size:14px}
+    @media(max-width:700px){.today-grid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -40,6 +59,29 @@
         </div>
       </div>
 
+      <div class="today-grid">
+        <div class="today-card checked" id="checkedInCard">
+          <div class="label">今日已打卡</div>
+          <div class="value" id="checkedInCount">-</div>
+        </div>
+        <div class="today-card pending" id="pendingCard">
+          <div class="label">今日尚未打卡</div>
+          <div class="value" id="pendingCount">-</div>
+        </div>
+      </div>
+
+      <div class="card" id="checkedInPanel" style="display:none;">
+        <h2 style="margin-top:0;">今日已打卡人員</h2>
+        <div id="checkedInList" class="user-list"></div>
+        <div class="pager" id="checkedInPager"></div>
+      </div>
+
+      <div class="card" id="pendingPanel" style="display:none;">
+        <h2 style="margin-top:0;">今日尚未打卡人員</h2>
+        <div id="pendingList" class="user-list"></div>
+        <div class="pager" id="pendingPager"></div>
+      </div>
+
       <div class="kpis" style="margin-top:20px;">
         <div class="card kpi"><div class="label">活躍人數</div><div id="activeUsers" class="value">0</div></div>
         <div class="card kpi"><div class="label">總打卡次數</div><div id="totalCheckins" class="value">0</div></div>
@@ -57,6 +99,78 @@
     let chart;
     const buttons = [...document.querySelectorAll('[data-period]')];
     const setActive = () => buttons.forEach(btn => btn.className = btn.dataset.period === currentPeriod ? '' : 'ghost');
+
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    const renderUserList = (listEl, users) => {
+      listEl.innerHTML = '';
+      if (!users || users.length === 0) {
+        listEl.innerHTML = '<div style="color:#6b7280;padding:12px;">沒有資料</div>';
+        return;
+      }
+      users.forEach((u) => {
+        const div = document.createElement('div');
+        div.className = 'user-item';
+        div.innerHTML = `<a class="user-link" href="/telegram/admin/method-analysis?userId=${u.telegramUserId}&name=${encodeURIComponent(u.displayName)}">${escapeHtml(u.displayName)}</a>`;
+        listEl.appendChild(div);
+      });
+    };
+
+    const renderPager = (pagerEl, page, totalPages, onPageChange) => {
+      pagerEl.innerHTML = '';
+      if (totalPages <= 1) return;
+      const prev = document.createElement('button');
+      prev.textContent = '← 上一頁';
+      prev.className = page <= 1 ? 'ghost' : '';
+      prev.disabled = page <= 1;
+      prev.onclick = () => onPageChange(page - 1);
+      const next = document.createElement('button');
+      next.textContent = '下一頁 →';
+      next.className = page >= totalPages ? 'ghost' : '';
+      next.disabled = page >= totalPages;
+      next.onclick = () => onPageChange(page + 1);
+      const info = document.createElement('span');
+      info.className = 'info';
+      info.textContent = `第 ${page} / ${totalPages} 頁`;
+      pagerEl.appendChild(prev);
+      pagerEl.appendChild(info);
+      pagerEl.appendChild(next);
+    };
+
+    const loadCheckedIn = async (page = 1) => {
+      const res = await fetch(`/telegram/admin/api/today-checkins?page=${page}&limit=20`);
+      const data = await res.json();
+      document.getElementById('checkedInCount').textContent = `${data.total} 人`;
+      renderUserList(document.getElementById('checkedInList'), data.users);
+      renderPager(document.getElementById('checkedInPager'), data.page, data.totalPages, loadCheckedIn);
+    };
+
+    const loadPending = async (page = 1) => {
+      const res = await fetch(`/telegram/admin/api/today-pending?page=${page}&limit=20`);
+      const data = await res.json();
+      document.getElementById('pendingCount').textContent = `${data.total} 人`;
+      renderUserList(document.getElementById('pendingList'), data.users);
+      renderPager(document.getElementById('pendingPager'), data.page, data.totalPages, loadPending);
+    };
+
+    const togglePanel = (panelId) => {
+      const panel = document.getElementById(panelId);
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+
+    document.getElementById('checkedInCard').onclick = () => {
+      togglePanel('checkedInPanel');
+      togglePanel('pendingPanel');
+      if (document.getElementById('checkedInPanel').style.display !== 'none') loadCheckedIn(1);
+    };
+
+    document.getElementById('pendingCard').onclick = () => {
+      togglePanel('pendingPanel');
+      togglePanel('checkedInPanel');
+      if (document.getElementById('pendingPanel').style.display !== 'none') loadPending(1);
+    };
+
     const load = async () => {
       const res = await fetch(`/telegram/admin/api/overview?period=${currentPeriod}`);
       const data = await res.json();
@@ -73,9 +187,12 @@
         options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }}}}
       });
     };
+
     buttons.forEach(btn => btn.onclick = () => { currentPeriod = btn.dataset.period; setActive(); load(); });
     setActive();
     load();
+    loadCheckedIn(1);
+    loadPending(1);
   </script>
 </body>
 </html>

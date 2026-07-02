@@ -1,19 +1,10 @@
 import moment from 'moment-timezone';
 import { db } from '../db';
 import { TelegramWebAppUser } from '../utils/telegramWebApp';
+import { PracticeMethod, getPracticeMethodRows, buildPracticeMethodTree } from './taxonomy';
+import { normalizeSelectedLeafIds } from './taxonomy';
 
 const TIMEZONE = 'Asia/Taipei';
-
-export interface PracticeMethod {
-    id: number;
-    code: string;
-    nameZh: string;
-    nameEn: string | null;
-    estimatedMinutes: number | null;
-    parentId: number | null;
-    methodType: 'group' | 'leaf';
-    children: PracticeMethod[];
-}
 
 export interface TodayCheckinResponse {
     date: string;
@@ -39,45 +30,7 @@ export const upsertTelegramUser = async (user: TelegramWebAppUser) => {
 };
 
 export const getPracticeMethods = async (): Promise<PracticeMethod[]> => {
-    const { rows } = await db.query(
-        `SELECT id, code, name_zh, name_en, estimated_minutes, parent_id, method_type
-         FROM practice_methods
-         WHERE is_active = TRUE
-         ORDER BY sort_order ASC, id ASC`
-    );
-
-    const methodMap = new Map<number, PracticeMethod>();
-
-    rows.forEach((row) => {
-        methodMap.set(row.id, {
-            id: row.id,
-            code: row.code,
-            nameZh: row.name_zh,
-            nameEn: row.name_en,
-            estimatedMinutes: row.estimated_minutes,
-            parentId: row.parent_id,
-            methodType: row.method_type === 'group' ? 'group' : 'leaf',
-            children: []
-        });
-    });
-
-    const roots: PracticeMethod[] = [];
-    rows.forEach((row) => {
-        const method = methodMap.get(row.id);
-        if (!method) return;
-
-        if (row.parent_id) {
-            const parent = methodMap.get(row.parent_id);
-            if (parent) {
-                parent.children.push(method);
-                return;
-            }
-        }
-
-        roots.push(method);
-    });
-
-    return roots;
+    return buildPracticeMethodTree(await getPracticeMethodRows());
 };
 
 export const getTodayCheckin = async (telegramUserId: number): Promise<TodayCheckinResponse> => {
@@ -102,6 +55,7 @@ export const getTodayCheckin = async (telegramUserId: number): Promise<TodayChec
     }
 
     const checkin = rows[0];
+    const practiceMethodRows = await getPracticeMethodRows();
     const selected = await db.query(
         `SELECT practice_method_id
          FROM telegram_checkin_method_selections
@@ -114,7 +68,7 @@ export const getTodayCheckin = async (telegramUserId: number): Promise<TodayChec
         date: today,
         alreadyCheckedIn: true,
         checkinLogId: checkin.id,
-        selectedMethodIds: selected.rows.map((r) => r.practice_method_id),
+        selectedMethodIds: normalizeSelectedLeafIds(selected.rows.map((r) => r.practice_method_id), practiceMethodRows),
         reflectionNote: checkin.reflection_note || '',
         bodyFeelingNote: checkin.body_feeling_note || ''
     };
@@ -146,7 +100,7 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         await client.query('BEGIN');
 
         const methodRows = await client.query(
-            `SELECT id, name_zh, method_type
+            `SELECT id, code, name_zh, method_type
              FROM practice_methods
              WHERE id = ANY($1::int[]) AND is_active = TRUE
              ORDER BY sort_order ASC, id ASC`,
@@ -219,7 +173,8 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
             date: today,
             checkinLogId,
             alreadyCheckedIn,
-            selectedMethods: methodNames
+            selectedMethods: methodNames,
+            selectedMethodCodes: methodRows.rows.map((row) => row.code)
         };
     } catch (error) {
         await client.query('ROLLBACK');

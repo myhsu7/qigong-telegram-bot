@@ -10,7 +10,13 @@
     .container { max-width: 760px; margin: 0 auto; padding: 20px; }
     .card { background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-radius: 18px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.08); margin-bottom: 16px; }
     h1 { margin: 0 0 8px; font-size: 26px; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
     .muted { color: #6b7280; }
+    .tabs { display:flex; gap:10px; margin-top:16px; }
+    .tab-btn { border:0; border-radius:999px; padding:10px 16px; font-weight:600; background:#e5e7eb; color:#374151; cursor:pointer; }
+    .tab-btn.active { background: linear-gradient(90deg,#0d6efd,#7c3aed); color:#fff; }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
     .stat-grid { display:grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin-top: 12px; }
     .stat { background:#f8fafc; border-radius:14px; padding:14px; }
     .stat .label { color:#6b7280; font-size:13px; }
@@ -23,20 +29,76 @@
     .badge-name { font-weight:700; margin-top:6px; }
     .badge-desc { color:#6b7280; font-size:13px; margin-top:6px; line-height:1.4; }
     .empty { text-align:center; color:#6b7280; padding:30px 0; }
+    .month-nav { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+    .month-nav button { border:0; border-radius:10px; padding:10px 14px; background:#e5e7eb; color:#111827; cursor:pointer; }
+    .month-nav button:disabled { opacity:.45; cursor:not-allowed; }
+    .pill-row { display:flex; flex-wrap:wrap; gap:8px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 12px; font-size:13px; background:#eef2ff; color:#3730a3; }
+    .entry-list { display:flex; flex-direction:column; gap:12px; }
+    .entry-card { border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff; }
+    .entry-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .entry-date { font-weight:700; font-size:16px; }
+    .entry-weekday { color:#6b7280; font-size:13px; margin-top:4px; }
+    .group-tag { background:#ede9fe; color:#6d28d9; }
+    .leaf-tag { background:#ecfeff; color:#0f766e; }
+    .tag-group { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .note-block { margin-top:12px; padding-top:12px; border-top:1px solid #f1f5f9; }
+    .note-label { font-size:12px; font-weight:700; color:#6b7280; letter-spacing:.04em; text-transform:uppercase; margin-bottom:4px; }
+    .section-space { margin-top:16px; }
+    @media (max-width: 640px) {
+      .container { padding: 14px; }
+      .stat-grid { grid-template-columns: 1fr; }
+      .month-nav { flex-wrap:wrap; }
+      .month-nav > div { width:100%; text-align:center; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h1>🏮 我的成就</h1>
-      <div class="muted">查看你的境界、總打卡、連續天數與已解鎖勳章。</div>
-      <div id="summary"></div>
+      <h1>🏮 我的修練</h1>
+      <div class="muted">查看你的境界、勳章與每月打卡記錄。</div>
+      <div class="tabs">
+        <button id="tabAchievements" class="tab-btn active" type="button">成就總覽</button>
+        <button id="tabHistory" class="tab-btn" type="button">歷史記錄</button>
+      </div>
     </div>
 
-    <div class="card">
-      <h2 style="margin-top:0;">🏆 榮譽勳章</h2>
-      <div id="badgeGrid" class="badge-grid"></div>
-      <div id="badgeEmpty" class="empty" style="display:none;">目前還沒有勳章，持續打卡很快就會有第一枚成就！</div>
+    <div id="panelAchievements" class="tab-panel active">
+      <div class="card">
+        <div id="summary"></div>
+      </div>
+
+      <div class="card">
+        <h2>🏆 榮譽勳章</h2>
+        <div id="badgeGrid" class="badge-grid"></div>
+        <div id="badgeEmpty" class="empty" style="display:none;">目前還沒有勳章，持續打卡很快就會有第一枚成就！</div>
+      </div>
+    </div>
+
+    <div id="panelHistory" class="tab-panel">
+      <div class="card">
+        <div class="month-nav">
+          <button id="prevMonth" type="button">← 上個月</button>
+          <div>
+            <div id="historyMonthLabel" style="font-size:18px;font-weight:700;">載入中...</div>
+            <div class="muted">每月打卡摘要與功法分組</div>
+          </div>
+          <button id="nextMonth" type="button">下個月 →</button>
+        </div>
+        <div id="historySummary"></div>
+        <div class="section-space">
+          <div style="font-weight:700; margin-bottom:10px;">勳章紀錄</div>
+          <div id="historyBadges" class="pill-row"></div>
+          <div id="historyBadgesEmpty" class="muted" style="display:none;">目前還沒有勳章，繼續累積打卡吧。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📜 打卡記錄</h2>
+        <div id="historyList" class="entry-list"></div>
+        <div id="historyEmpty" class="empty" style="display:none;">這個月份還沒有打卡記錄。</div>
+      </div>
     </div>
   </div>
 
@@ -44,6 +106,35 @@
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
     const initData = tg?.initData || '';
+    const currentTab = { value: 'achievements' };
+    const historyState = { month: null, loaded: false };
+
+    const currentMonthText = (() => {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
+      const year = parts.find((part) => part.type === 'year')?.value || '0000';
+      const month = parts.find((part) => part.type === 'month')?.value || '01';
+      return `${year}-${month}`;
+    })();
+
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const shiftMonth = (monthText, delta) => {
+      const [year, month] = monthText.split('-').map(Number);
+      const date = new Date(year, month - 1 + delta, 1);
+      const nextYear = date.getFullYear();
+      const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+      return `${nextYear}-${nextMonth}`;
+    };
+
+    const getWeekdayLabel = (dateText) => {
+      const weekday = new Date(`${dateText}T00:00:00`).getDay();
+      return ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][weekday] || '';
+    };
 
     const apiFetch = async (url) => {
       const res = await fetch(url, { headers: { 'x-telegram-init-data': initData } });
@@ -54,54 +145,160 @@
       return res.json();
     };
 
-    const render = async () => {
-      try {
-        const data = await apiFetch('/telegram/api/webapp/achievements');
-        const stats = data.stats;
-        const nextMilestone = data.nextMilestone;
+    const renderAchievements = (data) => {
+      const stats = data.stats;
+      const nextMilestone = data.nextMilestone;
 
-        let progressPercent = 100;
-        if (stats.totalCheckins < 30) progressPercent = (stats.totalCheckins / 30) * 100;
-        else if (stats.totalCheckins < 90) progressPercent = ((stats.totalCheckins - 30) / 60) * 100;
-        else if (stats.totalCheckins < 200) progressPercent = ((stats.totalCheckins - 90) / 110) * 100;
+      let progressPercent = 100;
+      if (stats.totalCheckins < 30) progressPercent = (stats.totalCheckins / 30) * 100;
+      else if (stats.totalCheckins < 90) progressPercent = ((stats.totalCheckins - 30) / 60) * 100;
+      else if (stats.totalCheckins < 200) progressPercent = ((stats.totalCheckins - 90) / 110) * 100;
 
-        document.getElementById('summary').innerHTML = `
-          <div style="font-size:18px;font-weight:700;margin-top:12px;">【當前境界】${data.levelTitle}</div>
-          <div class="progress-wrap"><div class="progress-bar" style="width:${Math.max(0, Math.min(progressPercent, 100)).toFixed(1)}%"></div></div>
-          <div class="muted" style="margin-top:8px;">${nextMilestone ? `距離 ${nextMilestone.title} 還差 ${nextMilestone.remaining} ${nextMilestone.unit}` : '你已達到目前最高等級，持續精進！'}</div>
-          <div class="stat-grid">
-            <div class="stat"><div class="label">目前連續打卡</div><div class="value">${stats.currentStreak} 天</div></div>
-            <div class="stat"><div class="label">最長連續打卡</div><div class="value">${stats.longestStreak} 天</div></div>
-            <div class="stat"><div class="label">總打卡天數</div><div class="value">${stats.totalCheckins} 天</div></div>
-            <div class="stat"><div class="label">最近打卡日期</div><div class="value" style="font-size:18px;">${stats.lastCheckinDate || '-'}</div></div>
-          </div>
+      document.getElementById('summary').innerHTML = `
+        <div style="font-size:18px;font-weight:700;">【當前境界】${escapeHtml(data.levelTitle)}</div>
+        <div class="progress-wrap"><div class="progress-bar" style="width:${Math.max(0, Math.min(progressPercent, 100)).toFixed(1)}%"></div></div>
+        <div class="muted" style="margin-top:8px;">${nextMilestone ? `距離 ${escapeHtml(nextMilestone.title)} 還差 ${nextMilestone.remaining} ${escapeHtml(nextMilestone.unit)}` : '你已達到目前最高等級，持續精進！'}</div>
+        <div class="stat-grid">
+          <div class="stat"><div class="label">目前連續打卡</div><div class="value">${stats.currentStreak} 天</div></div>
+          <div class="stat"><div class="label">最長連續打卡</div><div class="value">${stats.longestStreak} 天</div></div>
+          <div class="stat"><div class="label">總打卡天數</div><div class="value">${stats.totalCheckins} 天</div></div>
+          <div class="stat"><div class="label">最近打卡日期</div><div class="value" style="font-size:18px;">${escapeHtml(stats.lastCheckinDate || '-')}</div></div>
+        </div>
+      `;
+
+      const badgeGrid = document.getElementById('badgeGrid');
+      const badgeEmpty = document.getElementById('badgeEmpty');
+      badgeGrid.innerHTML = '';
+
+      if (!data.badges || data.badges.length === 0) {
+        badgeEmpty.style.display = 'block';
+        return;
+      }
+
+      badgeEmpty.style.display = 'none';
+      data.badges.forEach((badge) => {
+        const yearText = badge.earned_year && badge.earned_year !== 0 ? ` <span class="muted">(${badge.earned_year})</span>` : '';
+        const card = document.createElement('div');
+        card.className = 'badge-card';
+        card.innerHTML = `
+          <div class="badge-emoji">${escapeHtml(badge.emoji || '🏅')}</div>
+          <div class="badge-name">${escapeHtml(badge.name)}${yearText}</div>
+          <div class="badge-desc">${escapeHtml(badge.description || '')}</div>
         `;
+        badgeGrid.appendChild(card);
+      });
+    };
 
-        const badgeGrid = document.getElementById('badgeGrid');
-        const badgeEmpty = document.getElementById('badgeEmpty');
-        if (!data.badges || data.badges.length === 0) {
-          badgeEmpty.style.display = 'block';
-          return;
-        }
-        badgeEmpty.style.display = 'none';
-        badgeGrid.innerHTML = '';
+    const renderHistory = (data) => {
+      historyState.month = data.month;
+      historyState.loaded = true;
+
+      document.getElementById('historyMonthLabel').textContent = data.monthLabel;
+      document.getElementById('nextMonth').disabled = data.month >= currentMonthText;
+
+      document.getElementById('historySummary').innerHTML = `
+        <div class="stat-grid">
+          <div class="stat"><div class="label">本月打卡天數</div><div class="value">${data.checkinDaysInMonth} 天</div></div>
+          <div class="stat"><div class="label">目前連續打卡</div><div class="value">${data.stats.currentStreak} 天</div></div>
+          <div class="stat"><div class="label">最長連續打卡</div><div class="value">${data.stats.longestStreak} 天</div></div>
+          <div class="stat"><div class="label">累計總打卡</div><div class="value">${data.stats.totalCheckins} 天</div></div>
+        </div>
+      `;
+
+      const historyBadges = document.getElementById('historyBadges');
+      const historyBadgesEmpty = document.getElementById('historyBadgesEmpty');
+      historyBadges.innerHTML = '';
+      if (!data.badges || data.badges.length === 0) {
+        historyBadgesEmpty.style.display = 'block';
+      } else {
+        historyBadgesEmpty.style.display = 'none';
         data.badges.forEach((badge) => {
-          const yearText = badge.earned_year && badge.earned_year !== 0 ? ` <span class="muted">(${badge.earned_year})</span>` : '';
-          const card = document.createElement('div');
-          card.className = 'badge-card';
-          card.innerHTML = `
-            <div class="badge-emoji">${badge.emoji || '🏅'}</div>
-            <div class="badge-name">${badge.name}${yearText}</div>
-            <div class="badge-desc">${badge.description || ''}</div>
-          `;
-          badgeGrid.appendChild(card);
+          const yearsText = badge.years && badge.years.length > 0 ? ` [${badge.years.join(', ')}]` : '';
+          const countText = badge.count > 1 ? ` x${badge.count}` : '';
+          const pill = document.createElement('span');
+          pill.className = 'pill';
+          pill.textContent = `${badge.emoji || '🏅'} ${badge.name}${countText}${yearsText}`;
+          historyBadges.appendChild(pill);
         });
+      }
+
+      const historyList = document.getElementById('historyList');
+      const historyEmpty = document.getElementById('historyEmpty');
+      historyList.innerHTML = '';
+
+      if (!data.entries || data.entries.length === 0) {
+        historyEmpty.style.display = 'block';
+        return;
+      }
+
+      historyEmpty.style.display = 'none';
+      data.entries.forEach((entry) => {
+        const card = document.createElement('div');
+        card.className = 'entry-card';
+
+        const groupedTags = (entry.groupedMethods || []).map((name) => `<span class="pill group-tag">${escapeHtml(name)}</span>`).join('');
+        const leafTags = (entry.leafMethods || []).map((name) => `<span class="pill leaf-tag">${escapeHtml(name)}</span>`).join('');
+        const reflection = entry.reflectionNote
+          ? `<div class="note-block"><div class="note-label">心得</div><div>${escapeHtml(entry.reflectionNote)}</div></div>`
+          : '';
+        const bodyFeeling = entry.bodyFeelingNote
+          ? `<div class="note-block"><div class="note-label">身體感受</div><div>${escapeHtml(entry.bodyFeelingNote)}</div></div>`
+          : '';
+
+        card.innerHTML = `
+          <div class="entry-head">
+            <div>
+              <div class="entry-date">${escapeHtml(entry.date)}</div>
+              <div class="entry-weekday">${escapeHtml(getWeekdayLabel(entry.date))}</div>
+            </div>
+          </div>
+          <div class="tag-group">${groupedTags}</div>
+          <div class="tag-group">${leafTags}</div>
+          ${reflection}
+          ${bodyFeeling}
+        `;
+        historyList.appendChild(card);
+      });
+    };
+
+    const loadAchievements = async () => {
+      try {
+        renderAchievements(await apiFetch('/telegram/api/webapp/achievements'));
       } catch (error) {
-        document.getElementById('summary').innerHTML = `<div class="muted">載入失敗：${error.message}</div>`;
+        document.getElementById('summary').innerHTML = `<div class="muted">載入失敗：${escapeHtml(error.message)}</div>`;
       }
     };
 
-    render();
+    const loadHistory = async (monthText) => {
+      try {
+        renderHistory(await apiFetch(`/telegram/api/webapp/history?month=${encodeURIComponent(monthText)}`));
+      } catch (error) {
+        document.getElementById('historySummary').innerHTML = `<div class="muted">載入失敗：${escapeHtml(error.message)}</div>`;
+      }
+    };
+
+    const setTab = async (tabName) => {
+      currentTab.value = tabName;
+      const isAchievements = tabName === 'achievements';
+      document.getElementById('tabAchievements').classList.toggle('active', isAchievements);
+      document.getElementById('tabHistory').classList.toggle('active', !isAchievements);
+      document.getElementById('panelAchievements').classList.toggle('active', isAchievements);
+      document.getElementById('panelHistory').classList.toggle('active', !isAchievements);
+
+      if (!isAchievements && !historyState.loaded) {
+        await loadHistory(currentMonthText);
+      }
+    };
+
+    document.getElementById('tabAchievements').addEventListener('click', () => setTab('achievements'));
+    document.getElementById('tabHistory').addEventListener('click', () => setTab('history'));
+    document.getElementById('prevMonth').addEventListener('click', () => loadHistory(shiftMonth(historyState.month || currentMonthText, -1)));
+    document.getElementById('nextMonth').addEventListener('click', () => {
+      if (!historyState.month || historyState.month >= currentMonthText) return;
+      loadHistory(shiftMonth(historyState.month, 1));
+    });
+
+    loadAchievements();
   </script>
 </body>
 </html>

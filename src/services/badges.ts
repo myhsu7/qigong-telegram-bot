@@ -2,8 +2,20 @@ import moment from 'moment-timezone';
 import { Lunar } from 'lunar-javascript';
 import { db } from '../db';
 import { getUserStats } from './stats';
+import { getMethodTaxonomy } from './taxonomy';
 
 const TIMEZONE = 'Asia/Taipei';
+
+const WINTER_GUISHOU_CODES = ['guishou_bagua', 'guishou_qiankun', 'guishou_fengxiang_guishuo'] as const;
+const WINTER_GUISHOU_NOTE_PATTERNS = ['%龜壽功%', '%八卦功%', '%乾坤功%', '%鳳翔與龜縮%'];
+const COMBO_BADGES = [
+    { badgeId: 'combo_dayan', parentCode: 'dayan' },
+    { badgeId: 'combo_wuqinxi', parentCode: 'wuqinxi' },
+    { badgeId: 'combo_huichun', parentCode: 'huichun' },
+    { badgeId: 'combo_guishou', parentCode: 'guishou' },
+    { badgeId: 'combo_zhengyang', parentCode: 'zhengyang' },
+    { badgeId: 'combo_jinggong', parentCode: 'jinggong' }
+] as const;
 
 export interface UnlockedBadge {
     badgeId: string;
@@ -11,6 +23,13 @@ export interface UnlockedBadge {
     emoji: string;
     description: string;
     earnedYear: number;
+}
+
+export interface GroupedBadge {
+    emoji: string;
+    name: string;
+    count: number;
+    years: number[];
 }
 
 const hasBadge = async (telegramUserId: number, badgeId: string, earnedYear: number) => {
@@ -50,11 +69,13 @@ const getJieQiDateStr = (year: number, jieQiName: string): string | null => {
     return jieQi ? jieQi.toYmd() : null;
 };
 
-export const evaluateTelegramBadges = async (telegramUserId: number, selectedMethods: string[]): Promise<UnlockedBadge[]> => {
+export const evaluateTelegramBadges = async (telegramUserId: number, selectedMethodCodes: string[]): Promise<UnlockedBadge[]> => {
     const unlocked: UnlockedBadge[] = [];
     const stats = await getUserStats(telegramUserId);
     const now = moment().tz(TIMEZONE);
     const currentYear = now.year();
+    const taxonomy = selectedMethodCodes.length > 0 ? await getMethodTaxonomy() : null;
+    const selectedCodeSet = new Set(selectedMethodCodes);
 
     // Streak badges
     const streakChecks: Array<[number, string]> = [
@@ -123,26 +144,49 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
         }
     }
 
-    // Seasonal winter (requires 龜壽功 selected across period, approximated by notes)
+    // Seasonal winter
     const winterSolsticeStr = getJieQiDateStr(currentYear, 'DONG_ZHI');
     if (winterSolsticeStr) {
         const winterSolstice = moment.tz(winterSolsticeStr, TIMEZONE);
         if (now.diff(winterSolstice, 'days') === 27) {
             const { rows } = await db.query(
-                `SELECT COUNT(*) AS count
-                 FROM telegram_checkin_logs l
-                 JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
-                 JOIN practice_methods pm ON pm.id = s.practice_method_id
-                 WHERE l.telegram_user_id = $1
-                   AND l.checkin_date >= $2
-                   AND l.checkin_date <= $3
-                   AND pm.name_zh = '龜壽功'`,
-                [telegramUserId, winterSolstice.format('YYYY-MM-DD'), now.format('YYYY-MM-DD')]
+                `WITH guishou_days AS (
+                     SELECT DISTINCT l.checkin_date AS local_date
+                     FROM telegram_checkin_logs l
+                     LEFT JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
+                     LEFT JOIN practice_methods pm ON pm.id = s.practice_method_id
+                     WHERE l.telegram_user_id = $1
+                       AND l.checkin_date >= $2
+                       AND l.checkin_date <= $3
+                       AND (
+                           pm.code = ANY($4::text[])
+                           OR COALESCE(l.note, '') LIKE ANY($5::text[])
+                       )
+                 )
+                 SELECT COUNT(*) AS count FROM guishou_days`,
+                [
+                    telegramUserId,
+                    winterSolstice.format('YYYY-MM-DD'),
+                    now.format('YYYY-MM-DD'),
+                    WINTER_GUISHOU_CODES,
+                    WINTER_GUISHOU_NOTE_PATTERNS
+                ]
             );
             if (parseInt(rows[0].count, 10) >= 27) {
                 const badge = await awardBadge(telegramUserId, 'seasonal_winter_27', currentYear);
                 if (badge) unlocked.push(badge);
             }
+        }
+    }
+
+    if (taxonomy) {
+        for (const combo of COMBO_BADGES) {
+            const requiredLeafCodes = taxonomy.leafCodesByParentCode.get(combo.parentCode) || [];
+            if (requiredLeafCodes.length === 0) continue;
+            if (!requiredLeafCodes.every((code) => selectedCodeSet.has(code))) continue;
+
+            const badge = await awardBadge(telegramUserId, combo.badgeId, currentYear);
+            if (badge) unlocked.push(badge);
         }
     }
 
@@ -159,4 +203,27 @@ export const getUserBadges = async (telegramUserId: number) => {
         [telegramUserId]
     );
     return rows;
+};
+
+export const getGroupedUserBadges = async (telegramUserId: number): Promise<GroupedBadge[]> => {
+    const badges = await getUserBadges(telegramUserId);
+    const grouped = new Map<string, GroupedBadge>();
+
+    badges.forEach((badge) => {
+        const existing: GroupedBadge = grouped.get(badge.name) || {
+            emoji: badge.emoji || '',
+            name: badge.name,
+            count: 0,
+            years: []
+        };
+
+        existing.count += 1;
+        if (badge.earned_year && badge.earned_year !== 0) {
+            existing.years.push(badge.earned_year);
+        }
+
+        grouped.set(badge.name, existing);
+    });
+
+    return Array.from(grouped.values());
 };

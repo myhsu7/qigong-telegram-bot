@@ -17,6 +17,12 @@
     th, td { text-align:left; padding:8px; border-bottom:1px solid #eee; }
     .list a { display:block; padding:8px 10px; border:1px solid #eee; border-radius:8px; margin-bottom:6px; text-decoration:none; color:#111; }
     .muted { color:#6b7280; }
+    .segmented { display:inline-flex; background:#eef2ff; border-radius:999px; padding:4px; gap:4px; }
+    .segmented button { background:transparent; color:#4338ca; border-radius:999px; }
+    .segmented button.active { background:#4338ca; color:#fff; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -24,11 +30,15 @@
     <h1>Telegram 功法分析</h1>
     <div class="grid">
       <div class="card">
-        <div class="row" style="justify-content:space-between; margin-bottom:12px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:12px; flex-wrap:wrap;">
           <h2 style="margin:0;">全體近 30 / 90 天功法分布</h2>
-          <div class="row">
-            <button id="period30">30天</button>
-            <button id="period90">90天</button>
+          <div class="row" style="flex-wrap:wrap;">
+            <div class="segmented">
+              <button id="modeGrouped" class="active" type="button">父功法</button>
+              <button id="modeLeaf" type="button">葉子功法</button>
+            </div>
+            <button id="period30" type="button">30天</button>
+            <button id="period90" type="button">90天</button>
           </div>
         </div>
         <div style="position:relative; height:360px;"><canvas id="communityChart"></canvas></div>
@@ -38,7 +48,7 @@
         <h2 style="margin-top:0;">搜尋學員</h2>
         <div class="row" style="margin-bottom:12px;">
           <input id="query" placeholder="輸入姓名或 username" />
-          <button id="search">搜尋</button>
+          <button id="search" type="button">搜尋</button>
         </div>
         <div id="results" class="list"></div>
       </div>
@@ -60,37 +70,90 @@
   </div>
   <script>
     let chart;
+    let currentMode = 'grouped';
+    let currentPeriod = '30d';
+    let communityData = null;
+    let currentUserData = null;
+
     const communityMeta = document.getElementById('communityMeta');
+
+    const getModeItems = (analysis) => {
+      if (!analysis) return [];
+      return currentMode === 'grouped'
+        ? (analysis.groupMethods || analysis.methods || [])
+        : (analysis.leafMethods || []);
+    };
+
+    const getModeTotal = (analysis) => {
+      if (!analysis) return 0;
+      return currentMode === 'grouped'
+        ? (analysis.totalMatchedGroupDays || analysis.totalMatchedMethodDays || 0)
+        : (analysis.totalMatchedLeafDays || 0);
+    };
+
+    const setModeButtons = () => {
+      document.getElementById('modeGrouped').classList.toggle('active', currentMode === 'grouped');
+      document.getElementById('modeLeaf').classList.toggle('active', currentMode === 'leaf');
+    };
+
     const renderMethodTable = (el, analysis) => {
-      if (!analysis || !analysis.methods || analysis.methods.length === 0) {
+      const items = getModeItems(analysis);
+      if (!items.length) {
         el.innerHTML = '<tr><td class="muted">無資料</td></tr>';
         return;
       }
       let html = '<thead><tr><th>功法</th><th>天數</th><th>配比</th><th>出席率</th></tr></thead><tbody>';
-      analysis.methods.forEach((m) => {
-        html += `<tr><td>${m.methodName}</td><td>${m.matchedDays}</td><td>${(m.compositionRatio*100).toFixed(1)}%</td><td>${(m.attendanceRatio*100).toFixed(1)}%</td></tr>`;
+      items.forEach((m) => {
+        html += `<tr><td>${m.methodName}</td><td>${m.matchedDays}</td><td>${(m.compositionRatio * 100).toFixed(1)}%</td><td>${(m.attendanceRatio * 100).toFixed(1)}%</td></tr>`;
       });
       html += '</tbody>';
       el.innerHTML = html;
     };
 
-    const loadSummary = async (period) => {
-      const res = await fetch(`/telegram/admin/api/method-analysis/summary?period=${period}`);
-      const data = await res.json();
-      const labels = data.methods.map((m) => m.methodName);
-      const values = data.methods.map((m) => m.matchedDays);
-      const colors = ['#0d6efd','#198754','#ffc107','#fd7e14','#dc3545','#6f42c1','#20c997'];
+    const renderCommunitySummary = () => {
+      const items = getModeItems(communityData);
+      const labels = items.map((m) => m.methodName);
+      const values = items.map((m) => m.matchedDays);
+      const colors = ['#0d6efd','#198754','#ffc107','#fd7e14','#dc3545','#6f42c1','#20c997','#14b8a6','#8b5cf6','#f97316'];
       if (chart) chart.destroy();
       chart = new Chart(document.getElementById('communityChart').getContext('2d'), {
         type: 'doughnut',
         data: { labels, datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length) }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
       });
-      communityMeta.textContent = `總打卡天數：${data.totalCheckinDays}｜功法命中總天數：${data.totalMatchedMethodDays}`;
+
+      const modeLabel = currentMode === 'grouped' ? '父功法命中總天數' : '葉子功法命中總天數';
+      communityMeta.textContent = `總打卡天數：${communityData.totalCheckinDays}｜${modeLabel}：${getModeTotal(communityData)}`;
+    };
+
+    const renderUserTables = () => {
+      renderMethodTable(document.getElementById('table30'), currentUserData?.analysis30 || null);
+      renderMethodTable(document.getElementById('table90'), currentUserData?.analysis90 || null);
+    };
+
+    const loadSummary = async (period) => {
+      currentPeriod = period;
+      const res = await fetch(`/telegram/admin/api/method-analysis/summary?period=${period}`);
+      communityData = await res.json();
+      renderCommunitySummary();
     };
 
     document.getElementById('period30').onclick = () => loadSummary('30d');
     document.getElementById('period90').onclick = () => loadSummary('90d');
+
+    document.getElementById('modeGrouped').onclick = () => {
+      currentMode = 'grouped';
+      setModeButtons();
+      if (communityData) renderCommunitySummary();
+      renderUserTables();
+    };
+
+    document.getElementById('modeLeaf').onclick = () => {
+      currentMode = 'leaf';
+      setModeButtons();
+      if (communityData) renderCommunitySummary();
+      renderUserTables();
+    };
 
     document.getElementById('search').onclick = async () => {
       const q = document.getElementById('query').value.trim();
@@ -105,16 +168,16 @@
         a.onclick = async (e) => {
           e.preventDefault();
           document.getElementById('userTitle').textContent = `個人分析：${u.displayName}`;
-          const res = await fetch(`/telegram/admin/api/method-analysis/user?userId=${u.telegramUserId}`);
-          const data = await res.json();
-          renderMethodTable(document.getElementById('table30'), data.analysis30);
-          renderMethodTable(document.getElementById('table90'), data.analysis90);
+          const userRes = await fetch(`/telegram/admin/api/method-analysis/user?userId=${u.telegramUserId}`);
+          currentUserData = await userRes.json();
+          renderUserTables();
         };
         results.appendChild(a);
       });
     };
 
-    loadSummary('30d');
+    setModeButtons();
+    loadSummary(currentPeriod);
   </script>
 </body>
 </html>

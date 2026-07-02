@@ -5,6 +5,7 @@ import { getLevelTitle, getUserStats } from '../services/stats';
 import { evaluateTelegramBadges } from '../services/badges';
 import { getUserBadges } from '../services/badges';
 import { sendTelegramCheckinSummary } from '../services/chatSummary';
+import { getTelegramHistory } from '../services/history';
 
 const router = Router();
 
@@ -52,7 +53,7 @@ router.post('/checkin', async (req, res) => {
         const bodyFeelingNote = typeof req.body?.bodyFeelingNote === 'string' ? req.body.bodyFeelingNote : '';
 
         const saved = await saveTodayCheckin(auth.user.id, methodIds, reflectionNote, bodyFeelingNote);
-        const unlockedBadges = saved.alreadyCheckedIn ? [] : await evaluateTelegramBadges(auth.user.id, saved.selectedMethods);
+        const unlockedBadges = await evaluateTelegramBadges(auth.user.id, saved.selectedMethodCodes);
         const stats = await getUserStats(auth.user.id);
         try {
             await sendTelegramCheckinSummary(auth.user.id, {
@@ -67,6 +68,21 @@ router.post('/checkin', async (req, res) => {
     } catch (error) {
         console.error('[api] failed to save today checkin', error);
         res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to save check-in' });
+    }
+});
+
+router.get('/history', async (req, res) => {
+    try {
+        const initData = resolveInitData(req);
+        const auth = verifyTelegramWebAppInitData(initData);
+        await upsertTelegramUser(auth.user);
+
+        const monthParam = typeof req.query.month === 'string' ? req.query.month : undefined;
+        const data = await getTelegramHistory(auth.user.id, monthParam);
+        res.json(data);
+    } catch (error) {
+        console.error('[api] failed to load history', error);
+        res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
 });
 

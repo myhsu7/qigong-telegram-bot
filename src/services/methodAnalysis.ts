@@ -21,6 +21,15 @@ export interface MethodMixResult {
     groupMethods: MethodMixItem[];
 }
 
+export interface UserPracticeJournalEntry {
+    id: number;
+    date: string;
+    groupedMethods: string[];
+    leafMethods: string[];
+    reflectionNote: string;
+    bodyFeelingNote: string;
+}
+
 interface MethodSelectionRow {
     checkinLogId: number;
     methodId: number;
@@ -146,6 +155,57 @@ const getMethodSelectionRows = async (periodDays: number, telegramUserId?: numbe
         methodCode: row.method_code,
         methodName: row.method_name
     }));
+};
+
+export const getUserPracticeJournal = async (telegramUserId: number, limit = 12): Promise<UserPracticeJournalEntry[]> => {
+    const taxonomy = await getMethodTaxonomy();
+    const { rows } = await db.query(
+        `SELECT l.id,
+                l.checkin_date,
+                l.reflection_note,
+                l.body_feeling_note,
+                ARRAY_AGG(pm.id ORDER BY pm.sort_order ASC, pm.id ASC)
+                    FILTER (WHERE pm.id IS NOT NULL) AS method_ids,
+                ARRAY_AGG(pm.name_zh ORDER BY pm.sort_order ASC, pm.id ASC)
+                    FILTER (WHERE pm.id IS NOT NULL) AS leaf_method_names
+         FROM telegram_checkin_logs l
+         LEFT JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
+         LEFT JOIN practice_methods pm ON pm.id = s.practice_method_id
+         WHERE l.telegram_user_id = $1
+           AND (
+               COALESCE(BTRIM(l.reflection_note), '') <> ''
+               OR COALESCE(BTRIM(l.body_feeling_note), '') <> ''
+           )
+         GROUP BY l.id
+         ORDER BY l.checkin_date DESC
+         LIMIT $2`,
+        [telegramUserId, limit]
+    );
+
+    return rows.map((row) => {
+        const methodIds = Array.isArray(row.method_ids)
+            ? row.method_ids.map((methodId: number | string) => Number(methodId)).filter((methodId: number) => Number.isFinite(methodId))
+            : [];
+        const groupedMethodNames = new Map<number, string>();
+
+        methodIds.forEach((methodId: number) => {
+            const groupedMethod = taxonomy.parentByLeafId.get(methodId) || taxonomy.rowById.get(methodId);
+            if (groupedMethod) {
+                groupedMethodNames.set(groupedMethod.id, groupedMethod.nameZh);
+            }
+        });
+
+        return {
+            id: Number(row.id),
+            date: row.checkin_date,
+            groupedMethods: Array.from(groupedMethodNames.values()),
+            leafMethods: Array.isArray(row.leaf_method_names)
+                ? row.leaf_method_names.filter((name: string | null) => typeof name === 'string')
+                : [],
+            reflectionNote: row.reflection_note || '',
+            bodyFeelingNote: row.body_feeling_note || ''
+        };
+    });
 };
 
 export const getCommunityMethodMix = async (periodDays: number): Promise<MethodMixResult> => {

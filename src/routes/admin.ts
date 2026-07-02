@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import path from 'path';
-import { getCommunityMethodMix, getUserMethodMix, searchTelegramUsers } from '../services/methodAnalysis';
+import { getCommunityMethodMix, getUserMethodMix, getUserPracticeJournal, searchTelegramUsers } from '../services/methodAnalysis';
 import { getLeaderboard, getOverviewStats } from '../services/stats';
 
 const router = Router();
@@ -73,9 +73,12 @@ router.get('/api/method-analysis/user', async (req, res) => {
     try {
         const userId = Number(req.query.userId);
         if (!userId) return res.status(400).json({ error: 'Missing userId' });
-        const analysis30 = await getUserMethodMix(userId, 30);
-        const analysis90 = await getUserMethodMix(userId, 90);
-        res.json({ analysis30, analysis90 });
+        const [analysis30, analysis90, journal] = await Promise.all([
+            getUserMethodMix(userId, 30),
+            getUserMethodMix(userId, 90),
+            getUserPracticeJournal(userId)
+        ]);
+        res.json({ analysis30, analysis90, journal });
     } catch (error) {
         console.error('[admin] user analysis failed', error);
         res.status(500).json({ error: 'Failed to load user analysis' });

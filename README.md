@@ -37,6 +37,8 @@ Run the initial schema directly:
 psql "$DATABASE_URL" -f migrations/001_init.sql
 psql "$DATABASE_URL" -f migrations/002_badges.sql
 psql "$DATABASE_URL" -f migrations/003_update_practice_methods.sql
+psql "$DATABASE_URL" -f migrations/004_hierarchical_practice_methods.sql
+psql "$DATABASE_URL" -f migrations/005_combo_badges.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -53,6 +55,8 @@ Then run the migrations from the host into the containerized PostgreSQL:
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/001_init.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/002_badges.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/003_update_practice_methods.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/004_hierarchical_practice_methods.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/005_combo_badges.sql
 ```
 
 If you are reusing the same PostgreSQL container as the LINE bot, make sure your `.env` points to the Telegram database:

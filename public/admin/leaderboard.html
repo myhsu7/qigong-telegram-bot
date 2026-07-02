@@ -18,7 +18,9 @@
     .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
     button{padding:10px 14px;border:0;background:#0d6efd;color:#fff;border-radius:10px;cursor:pointer}
     .ghost{background:#e5e7eb;color:#111827}
-  </style>
+    .user-link{color:#0d6efd;text-decoration:none;font-weight:600}
+    .user-link:hover{text-decoration:underline}
+   </style>
 </head>
 <body>
   <div class="layout">
@@ -57,7 +59,10 @@
     const renderTable = (el, rows, valueKey, suffix) => {
       let html = '<thead><tr><th>#</th><th>名稱</th><th>數值</th></tr></thead><tbody>';
       rows.forEach((row, i) => {
-        html += `<tr><td>${i+1}</td><td>${row.displayName}</td><td>${row[valueKey]}${suffix}</td></tr>`;
+        const link = row.telegramUserId
+          ? `<a class="user-link" href="/telegram/admin/method-analysis?userId=${row.telegramUserId}&name=${encodeURIComponent(row.displayName)}">${row.displayName}</a>`
+          : row.displayName;
+        html += `<tr><td>${i+1}</td><td>${link}</td><td>${row[valueKey]}${suffix}</td></tr>`;
       });
       html += '</tbody>';
       el.innerHTML = html;

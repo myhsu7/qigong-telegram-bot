@@ -259,6 +259,24 @@
 
     setModeButtons();
     loadSummary(currentPeriod);
-  </script>
+
+    const params = new URLSearchParams(window.location.search);
+    const queryUserId = params.get('userId');
+    const queryName = params.get('name');
+    if (queryUserId) {
+      const displayName = queryName || '使用者';
+      document.getElementById('userTitle').textContent = `個人分析：${displayName}`;
+      fetch(`/telegram/admin/api/method-analysis/user?userId=${encodeURIComponent(queryUserId)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          currentUserData = data;
+          renderUserTables();
+          renderJournal(currentUserData.journal || []);
+        })
+        .catch((err) => {
+          console.error('[method-analysis] auto-load failed', err);
+        });
+    }
+   </script>
 </body>
 </html>

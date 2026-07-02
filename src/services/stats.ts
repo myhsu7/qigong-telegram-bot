@@ -145,7 +145,7 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
         ? (await db.query(streaksQuery, [range.start, range.end])).rows
         : (await db.query(streaksQuery)).rows;
 
-    const userStreaks = new Map<number, { displayName: string; maxStreak: number }>();
+    const userStreaks = new Map<number, { telegramUserId: number; displayName: string; maxStreak: number }>();
     let currentUserId: number | null = null;
     let currentDisplayName = '';
     let currentStreak = 0;
@@ -154,7 +154,7 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
 
     const flush = () => {
         if (currentUserId !== null) {
-            userStreaks.set(currentUserId, { displayName: currentDisplayName, maxStreak });
+            userStreaks.set(currentUserId, { telegramUserId: currentUserId, displayName: currentDisplayName, maxStreak });
         }
     };
 
@@ -181,6 +181,7 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
     flush();
 
     const totals = totalsRows.map((row) => ({
+        telegramUserId: Number(row.telegram_user_id),
         displayName: getDisplayName(row),
         totalDays: parseInt(row.total_days, 10)
     }));

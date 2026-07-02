@@ -3,10 +3,34 @@ import { env } from '../config/env';
 import { upsertTelegramUser } from '../services/checkin';
 import { buildBadgesMessage, buildEnhancedUserStatsMessage, buildLeaderboardMessage, getUserStats } from '../services/stats';
 import { buildMethodMixMessage, getUserMethodMix } from '../services/methodAnalysis';
-import { sendDailyTelegramReminder } from '../services/reminders';
+import { getTelegramReminderSettings, sendTelegramReminderPreview, updateTelegramReminderSettings } from '../services/reminders';
 import { buildWebAppCheckinSummary } from '../services/chatSummary';
+import moment from 'moment-timezone';
 
 export const bot = new Bot(env.telegramBotToken);
+
+const formatReminderTime = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
+
+const buildReminderSettingsMessage = (settings: {
+    reminderEnabled: boolean;
+    reminderHour: number;
+    reminderTimezone: string;
+}) => {
+    return [
+        '🔔 你的打卡提醒設定',
+        '',
+        `狀態：${settings.reminderEnabled ? '已開啟' : '已關閉'}`,
+        `時間：${formatReminderTime(settings.reminderHour)}`,
+        `時區：${settings.reminderTimezone}`,
+        '',
+        '可用指令：',
+        '- `/remind`：查看目前設定',
+        '- `/remind 21`：設為 21:00',
+        '- `/remind on`：開啟提醒',
+        '- `/remind off`：關閉提醒',
+        '- `/remind tz Asia/Taipei`：設定時區'
+    ].join('\n');
+};
 
 const ensureUser = async (ctx: any) => {
     if (!ctx.from) return;
@@ -113,10 +137,73 @@ bot.command('method90', async (ctx) => {
     await ctx.reply(buildMethodMixMessage(result));
 });
 
+bot.command('remind', async (ctx) => {
+    await ensureUser(ctx);
+    if (!ctx.from) return;
+
+    const rawInput = typeof ctx.match === 'string' ? ctx.match.trim() : '';
+    if (!rawInput) {
+        await ctx.reply(buildReminderSettingsMessage(await getTelegramReminderSettings(ctx.from.id)));
+        return;
+    }
+
+    const [action, ...restParts] = rawInput.split(/\s+/);
+    const normalizedAction = action.toLowerCase();
+
+    if (normalizedAction === 'off') {
+        const settings = await updateTelegramReminderSettings(ctx.from.id, { reminderEnabled: false });
+        await ctx.reply(
+            `🔕 已關閉每日打卡提醒。\n目前保留時間 ${formatReminderTime(settings.reminderHour)}（${settings.reminderTimezone}）。\n之後可用 /remind on 重新開啟。`
+        );
+        return;
+    }
+
+    if (normalizedAction === 'on') {
+        const settings = await updateTelegramReminderSettings(ctx.from.id, { reminderEnabled: true });
+        await ctx.reply(`✅ 已開啟每日打卡提醒：${formatReminderTime(settings.reminderHour)}（${settings.reminderTimezone}）。`);
+        return;
+    }
+
+    if (normalizedAction === 'tz') {
+        const timezone = restParts.join(' ').trim();
+        if (!timezone) {
+            await ctx.reply('請提供有效時區，例如：/remind tz Asia/Taipei 或 /remind tz America/New_York');
+            return;
+        }
+
+        if (!moment.tz.zone(timezone)) {
+            await ctx.reply('找不到這個時區。請使用 IANA 時區格式，例如：Asia/Taipei、America/New_York。');
+            return;
+        }
+
+        const settings = await updateTelegramReminderSettings(ctx.from.id, { reminderTimezone: timezone });
+        await ctx.reply(`✅ 已將提醒時區設為 ${settings.reminderTimezone}，目前提醒時間為 ${formatReminderTime(settings.reminderHour)}。`);
+        return;
+    }
+
+    if (!/^\d{1,2}$/.test(normalizedAction)) {
+        await ctx.reply('提醒設定格式錯誤。請用 /remind 21、/remind on、/remind off 或 /remind tz Asia/Taipei。');
+        return;
+    }
+
+    const reminderHour = Number(normalizedAction);
+    if (!Number.isInteger(reminderHour) || reminderHour < 0 || reminderHour > 23) {
+        await ctx.reply('提醒時間請輸入 0 到 23 的整數，例如：/remind 7 或 /remind 21。');
+        return;
+    }
+
+    const settings = await updateTelegramReminderSettings(ctx.from.id, {
+        reminderEnabled: true,
+        reminderHour
+    });
+    await ctx.reply(`✅ 已將每日提醒設為 ${formatReminderTime(settings.reminderHour)}（${settings.reminderTimezone}），並自動開啟提醒。`);
+});
+
 bot.command('remindtest', async (ctx) => {
     await ensureUser(ctx);
-    const result = await sendDailyTelegramReminder();
-    await ctx.reply(`補發提醒完成：${result.success}/${result.total}`);
+    if (!ctx.from) return;
+    const result = await sendTelegramReminderPreview(ctx.from.id);
+    await ctx.reply(`已送出提醒測試訊息：${result.success}/${result.total}`);
 });
 
 bot.on('message:web_app_data', async (ctx) => {

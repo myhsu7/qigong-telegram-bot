@@ -256,6 +256,10 @@ remindtest - 手動補發提醒（測試用）
 - `/leaderboard` shows all-time totals and longest streaks
 - `/weekly`, `/monthly`, `/quarterly`, `/yearly` show period leaderboards
 - `/method30` and `/method90` show structured method mix analysis based on selected practice methods
+- `/remind` shows your current reminder setting
+- `/remind 21` sets your reminder hour in 24-hour format and turns reminders on
+- `/remind on` and `/remind off` toggle personal reminders
+- `/remind tz Asia/Taipei` sets your personal reminder timezone
 
 ## Telegram admin / dashboard behavior
 
@@ -267,10 +271,11 @@ remindtest - 手動補發提醒（測試用）
 
 ## Reminder behavior
 
-- If `TELEGRAM_REMINDER_ENABLED=true`, the bot sends a daily reminder at `TELEGRAM_REMINDER_HOUR` (Asia/Taipei)
+- If `TELEGRAM_REMINDER_ENABLED=true`, the bot runs an hourly reminder job and sends only to users whose local hour matches their personal reminder setting
+- Personal reminder settings are stored per user as: enabled/disabled, reminder hour, and timezone
 - If today is a solar term, the reminder uses the solar-term practice guide
 - Otherwise it rotates through 50 daily wisdom sentences
-- `/remindtest` manually triggers the same reminder flow
+- `/remindtest` sends a preview reminder message to the current user only
 
 ## Badge and Level system
 

@@ -9,8 +9,19 @@ import { getSolarTermGuide } from '../content/solarTerms';
 
 const TIMEZONE = 'Asia/Taipei';
 
-const buildReminderText = () => {
-    const now = moment().tz(TIMEZONE);
+export interface TelegramReminderSettings {
+    reminderEnabled: boolean;
+    reminderHour: number;
+    reminderTimezone: string;
+}
+
+interface ReminderRecipient {
+    telegramUserId: number;
+    reminderTimezone: string;
+}
+
+const buildReminderText = (reminderTimezone: string) => {
+    const now = moment().tz(reminderTimezone);
     const lunar = Lunar.fromDate(now.toDate());
     const currentJieQi = lunar.getJieQi();
     const guide = currentJieQi ? getSolarTermGuide(currentJieQi) : null;
@@ -38,27 +49,98 @@ const buildReminderText = () => {
     ].join('\n');
 };
 
-export const sendDailyTelegramReminder = async () => {
-    const text = buildReminderText();
+const getReminderRecipients = async () => {
     const { rows } = await db.query(
-        `SELECT telegram_user_id
+        `SELECT telegram_user_id,
+                COALESCE(reminder_timezone, $1) AS reminder_timezone
          FROM telegram_users
-         ORDER BY telegram_user_id ASC`
+         WHERE COALESCE(reminder_enabled, TRUE) = TRUE
+           AND EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE COALESCE(reminder_timezone, $1)))::int = COALESCE(reminder_hour, $2)
+         ORDER BY telegram_user_id ASC`,
+        [TIMEZONE, env.telegramReminderHour]
     );
 
+    return rows
+        .map((row) => ({
+            telegramUserId: Number(row.telegram_user_id),
+            reminderTimezone: row.reminder_timezone || TIMEZONE
+        }))
+        .filter((row) => Number.isFinite(row.telegramUserId));
+};
+
+const sendReminderToTelegramUsers = async (recipients: ReminderRecipient[]) => {
+    
     let success = 0;
-    for (const row of rows) {
+    for (const recipient of recipients) {
         try {
-            await bot.api.sendMessage(String(row.telegram_user_id), text);
+            await bot.api.sendMessage(String(recipient.telegramUserId), buildReminderText(recipient.reminderTimezone));
             success += 1;
             await new Promise((resolve) => setTimeout(resolve, 50));
         } catch (error) {
-            console.error('[telegram-reminder] failed to send to user', row.telegram_user_id, error);
+            console.error('[telegram-reminder] failed to send to user', recipient.telegramUserId, error);
         }
     }
 
-    console.log(`[telegram-reminder] sent ${success}/${rows.length} reminders`);
-    return { total: rows.length, success };
+    console.log(`[telegram-reminder] sent ${success}/${recipients.length} reminders`);
+    return { total: recipients.length, success };
+};
+
+export const getTelegramReminderSettings = async (telegramUserId: number): Promise<TelegramReminderSettings> => {
+    const { rows } = await db.query(
+        `SELECT COALESCE(reminder_enabled, TRUE) AS reminder_enabled,
+                COALESCE(reminder_hour, $2) AS reminder_hour,
+                COALESCE(reminder_timezone, $3) AS reminder_timezone
+         FROM telegram_users
+         WHERE telegram_user_id = $1`,
+        [telegramUserId, env.telegramReminderHour, TIMEZONE]
+    );
+
+    if (rows.length === 0) {
+        return {
+            reminderEnabled: true,
+            reminderHour: env.telegramReminderHour,
+            reminderTimezone: TIMEZONE
+        };
+    }
+
+    return {
+        reminderEnabled: rows[0].reminder_enabled,
+        reminderHour: Number(rows[0].reminder_hour),
+        reminderTimezone: rows[0].reminder_timezone
+    };
+};
+
+export const updateTelegramReminderSettings = async (
+    telegramUserId: number,
+    updates: Partial<TelegramReminderSettings>
+): Promise<TelegramReminderSettings> => {
+    const current = await getTelegramReminderSettings(telegramUserId);
+    const next = {
+        reminderEnabled: updates.reminderEnabled ?? current.reminderEnabled,
+        reminderHour: updates.reminderHour ?? current.reminderHour,
+        reminderTimezone: updates.reminderTimezone ?? current.reminderTimezone
+    };
+
+    await db.query(
+        `UPDATE telegram_users
+         SET reminder_enabled = $2,
+             reminder_hour = $3,
+             reminder_timezone = $4,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE telegram_user_id = $1`,
+        [telegramUserId, next.reminderEnabled, next.reminderHour, next.reminderTimezone]
+    );
+
+    return next;
+};
+
+export const sendDailyTelegramReminder = async () => {
+    return sendReminderToTelegramUsers(await getReminderRecipients());
+};
+
+export const sendTelegramReminderPreview = async (telegramUserId: number) => {
+    const settings = await getTelegramReminderSettings(telegramUserId);
+    return sendReminderToTelegramUsers([{ telegramUserId, reminderTimezone: settings.reminderTimezone }]);
 };
 
 export const setupReminderCron = () => {
@@ -67,7 +149,7 @@ export const setupReminderCron = () => {
         return;
     }
 
-    cron.schedule(`0 ${env.telegramReminderHour} * * *`, () => {
+    cron.schedule('0 * * * *', () => {
         console.log('[telegram-reminder] running daily reminder job...');
         sendDailyTelegramReminder().catch((error) => {
             console.error('[telegram-reminder] job failed', error);
@@ -76,5 +158,5 @@ export const setupReminderCron = () => {
         timezone: TIMEZONE
     });
 
-    console.log(`[telegram-reminder] scheduled daily at ${env.telegramReminderHour}:00 ${TIMEZONE}`);
+    console.log(`[telegram-reminder] scheduled hourly routing by user reminder settings (${TIMEZONE} scheduler)`);
 };

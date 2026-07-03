@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { env } from './config/env';
-import { telegramWebhook } from './bot/telegram';
+import { telegramWebhook, setupBotCommands } from './bot/telegram';
 import webappRoutes from './routes/webapp';
 import apiRoutes from './routes/api';
 import { setupReminderCron } from './services/reminders';
@@ -31,4 +31,5 @@ app.listen(env.port, () => {
     console.log(`[telegram-bot] webhook path: /telegram/webhook/${env.telegramWebhookSecret}`);
     console.log(`[telegram-bot] webapp path: /telegram/webapp/checkin`);
     setupReminderCron();
+    setupBotCommands();
 });

@@ -221,3 +221,25 @@ bot.on('message:web_app_data', async (ctx) => {
 });
 
 export const telegramWebhook = webhookCallback(bot, 'express');
+
+export const setupBotCommands = async () => {
+    try {
+        await bot.api.setMyCommands([
+            { command: 'start', description: '開始使用 / 顯示主選單' },
+            { command: 'checkin', description: '開始今日打卡' },
+            { command: 'achievements', description: '查看成就頁' },
+            { command: 'mystats', description: '查看我的練功統計' },
+            { command: 'badges', description: '查看我的勳章' },
+            { command: 'leaderboard', description: '總排行榜' },
+            { command: 'weekly', description: '本週排行榜' },
+            { command: 'monthly', description: '本月排行榜' },
+            { command: 'method30', description: '最近 30 天功法分析' },
+            { command: 'method90', description: '最近 90 天功法分析' },
+            { command: 'remind', description: '設定每日提醒時間 / 時區 / 開關' },
+            { command: 'remindtest', description: '送出一則提醒測試訊息' }
+        ]);
+        console.log('[telegram-bot] command menu registered');
+    } catch (error) {
+        console.error('[telegram-bot] failed to register command menu', error);
+    }
+};

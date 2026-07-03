@@ -256,10 +256,25 @@ remindtest - 手動補發提醒（測試用）
 - `/leaderboard` shows all-time totals and longest streaks
 - `/weekly`, `/monthly`, `/quarterly`, `/yearly` show period leaderboards
 - `/method30` and `/method90` show structured method mix analysis based on selected practice methods
-- `/remind` shows your current reminder setting
-- `/remind 21` sets your reminder hour in 24-hour format and turns reminders on
-- `/remind on` and `/remind off` toggle personal reminders
-- `/remind tz Asia/Taipei` sets your personal reminder timezone
+
+## Bot commands
+
+The following commands are registered in Telegram's command menu (set via `setMyCommands` on startup):
+
+| Command | Description |
+|---|---|
+| `/start` | 開始使用 / 顯示主選單 |
+| `/checkin` | 開始今日打卡 |
+| `/achievements` | 查看成就頁 |
+| `/mystats` | 查看我的練功統計 |
+| `/badges` | 查看我的勳章 |
+| `/leaderboard` | 總排行榜 |
+| `/weekly` | 本週排行榜 |
+| `/monthly` | 本月排行榜 |
+| `/method30` | 最近 30 天功法分析 |
+| `/method90` | 最近 90 天功法分析 |
+| `/remind` | 設定每日提醒時間 / 時區 / 開關 |
+| `/remindtest` | 送出一則提醒測試訊息 |
 
 ## Telegram admin / dashboard behavior
 
@@ -271,11 +286,34 @@ remindtest - 手動補發提醒（測試用）
 
 ## Reminder behavior
 
-- If `TELEGRAM_REMINDER_ENABLED=true`, the bot runs an hourly reminder job and sends only to users whose local hour matches their personal reminder setting
-- Personal reminder settings are stored per user as: enabled/disabled, reminder hour, and timezone
+- If `TELEGRAM_REMINDER_ENABLED=true`, the bot runs an hourly cron job (at minute 0 of every hour, Asia/Taipei scheduler)
+- For each hourly run, the bot queries users whose **personal local hour** matches their `reminder_hour` in their `reminder_timezone`, and sends the reminder only to those users
+- DST is handled automatically by PostgreSQL `AT TIME ZONE` per-row evaluation
+- Personal reminder settings are stored on `telegram_users` as:
+  - `reminder_enabled BOOLEAN DEFAULT TRUE`
+  - `reminder_hour SMALLINT DEFAULT 20` (0-23, 24-hour format)
+  - `reminder_timezone TEXT DEFAULT 'Asia/Taipei'` (IANA timezone string)
 - If today is a solar term, the reminder uses the solar-term practice guide
 - Otherwise it rotates through 50 daily wisdom sentences
 - `/remindtest` sends a preview reminder message to the current user only
+
+### `/remind` command
+
+| Usage | Description |
+|---|---|
+| `/remind` | Show current reminder settings (status, time, timezone) |
+| `/remind 21` | Set reminder hour to 21:00 (0-23, 24-hour format) and turn reminders on |
+| `/remind on` | Turn reminders on |
+| `/remind off` | Turn reminders off |
+| `/remind tz America/New_York` | Set personal reminder timezone (IANA format) |
+
+Examples:
+- `/remind 7` — set reminder to 07:00
+- `/remind 22` — set reminder to 22:00
+- `/remind tz Asia/Taipei` — set timezone to Asia/Taipei
+- `/remind off` — disable reminders
+
+Setting a new hour with `/remind 21` automatically turns reminders on. Timezone is validated against the IANA timezone database via `moment.tz.zone()`.
 
 ## Badge and Level system
 

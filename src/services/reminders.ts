@@ -20,15 +20,23 @@ interface ReminderRecipient {
     reminderTimezone: string;
 }
 
+const getGreeting = (now: moment.Moment) => {
+    const hour = now.hour();
+    if (hour >= 5 && hour < 11) return '☀️ 早安！';
+    if (hour >= 11 && hour < 17) return '🌤 午安！';
+    return '🌙 晚安！';
+};
+
 const buildReminderText = (reminderTimezone: string) => {
     const now = moment().tz(reminderTimezone);
     const lunar = Lunar.fromDate(now.toDate());
     const currentJieQi = lunar.getJieQi();
     const guide = currentJieQi ? getSolarTermGuide(currentJieQi) : null;
+    const greeting = getGreeting(now);
 
     if (guide) {
         return [
-            `🌿 今日節氣：${currentJieQi}`,
+            `${greeting} 今日節氣：${currentJieQi}`,
             '',
             guide,
             '',
@@ -39,7 +47,7 @@ const buildReminderText = (reminderTimezone: string) => {
     }
 
     return [
-        '🌙 晚安！氣功時間到了！',
+        `${greeting} 氣功時間到了！`,
         '',
         getDailyWisdom(now),
         '',

@@ -14,24 +14,28 @@ const resolveInitData = (req: Request) => {
 };
 
 router.get('/practice-methods', async (req, res) => {
+    const startedAt = Date.now();
     try {
         const methods = await getPracticeMethods();
+        console.log(`[api] loaded practice methods in ${Date.now() - startedAt}ms (${methods.length} roots)`);
         res.json({ methods });
     } catch (error) {
-        console.error('[api] failed to load practice methods', error);
+        console.error(`[api] failed to load practice methods after ${Date.now() - startedAt}ms`, error);
         res.status(500).json({ error: 'Failed to load practice methods' });
     }
 });
 
 router.get('/checkin/today', async (req, res) => {
+    const startedAt = Date.now();
     try {
         const initData = resolveInitData(req);
         const auth = verifyTelegramWebAppInitData(initData);
         await upsertTelegramUser(auth.user);
         const data = await getTodayCheckin(auth.user.id);
+        console.log(`[api] loaded today checkin in ${Date.now() - startedAt}ms for ${auth.user.id}`);
         res.json(data);
     } catch (error) {
-        console.error('[api] failed to load today checkin', error);
+        console.error(`[api] failed to load today checkin after ${Date.now() - startedAt}ms`, error);
         res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
 });

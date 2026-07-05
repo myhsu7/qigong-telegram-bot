@@ -7,7 +7,9 @@ import apiRoutes from './routes/api';
 import { setupReminderCron } from './services/reminders';
 import { requireAdminBasicAuth, requireTailscaleInternal } from './middleware/adminSecurity';
 import adminRoutes from './routes/admin';
+import { setupErrorLogging } from './logger';
 
+setupErrorLogging('qigong-telegram-bot');
 const app = express();
 
 app.use(express.json());

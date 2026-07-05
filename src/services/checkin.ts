@@ -36,7 +36,7 @@ export const getPracticeMethods = async (): Promise<PracticeMethod[]> => {
 export const getTodayCheckin = async (telegramUserId: number): Promise<TodayCheckinResponse> => {
     const today = moment().tz(TIMEZONE).format('YYYY-MM-DD');
 
-    const { rows } = await db.query(
+    const { rows } = await db.queryWithRetry(
         `SELECT id, reflection_note, body_feeling_note
          FROM telegram_checkin_logs
          WHERE telegram_user_id = $1 AND checkin_date = $2`,
@@ -56,7 +56,7 @@ export const getTodayCheckin = async (telegramUserId: number): Promise<TodayChec
 
     const checkin = rows[0];
     const practiceMethodRows = await getPracticeMethodRows();
-    const selected = await db.query(
+    const selected = await db.queryWithRetry(
         `SELECT practice_method_id
          FROM telegram_checkin_method_selections
          WHERE checkin_log_id = $1

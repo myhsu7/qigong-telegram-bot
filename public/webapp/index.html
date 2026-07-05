@@ -280,10 +280,13 @@
 
     const load = async () => {
       try {
-        const [methodsResp, todayResp] = await Promise.all([
-          apiFetch('/telegram/api/webapp/practice-methods'),
-          apiFetch('/telegram/api/webapp/checkin/today')
-        ]);
+        const methodsResp = await apiFetch('/telegram/api/webapp/practice-methods').catch((error) => {
+          throw new Error(`功法列表載入失敗：${error.message}`);
+        });
+
+        const todayResp = await apiFetch('/telegram/api/webapp/checkin/today').catch((error) => {
+          throw new Error(`今日打卡資料載入失敗：${error.message}`);
+        });
 
         renderMethods(methodsResp.methods, todayResp.selectedMethodIds);
         reflectionNote.value = todayResp.reflectionNote || '';

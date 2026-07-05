@@ -45,7 +45,7 @@ const toPracticeMethodRow = (row: {
 });
 
 export const getPracticeMethodRows = async (): Promise<PracticeMethodRow[]> => {
-    const { rows } = await db.query(
+    const { rows } = await db.queryWithRetry(
         `SELECT id, code, name_zh, name_en, estimated_minutes, sort_order, parent_id, method_type
          FROM practice_methods
          WHERE is_active = TRUE

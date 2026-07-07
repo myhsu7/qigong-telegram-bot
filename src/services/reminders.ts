@@ -20,11 +20,72 @@ interface ReminderRecipient {
     reminderTimezone: string;
 }
 
+type ReminderSendErrorKind = 'network' | 'forbidden' | 'bad-request' | 'unknown';
+
 const getGreeting = (now: moment.Moment) => {
     const hour = now.hour();
     if (hour >= 5 && hour < 11) return '☀️ 早安！';
     if (hour >= 11 && hour < 17) return '🌤 午安！';
     return '🌙 晚安！';
+};
+
+const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return String(error);
+    }
+};
+
+const classifyReminderSendError = (error: unknown): ReminderSendErrorKind => {
+    const message = getErrorMessage(error);
+    if (
+        message.includes("Network request for 'sendMessage' failed")
+        || message.includes('fetch failed')
+        || message.includes('ETIMEDOUT')
+        || message.includes('ECONNRESET')
+        || message.includes('socket hang up')
+    ) {
+        return 'network';
+    }
+    if (message.includes('Forbidden') || message.includes('bot was blocked by the user')) {
+        return 'forbidden';
+    }
+    if (message.includes('Bad Request') || message.includes('chat not found')) {
+        return 'bad-request';
+    }
+    return 'unknown';
+};
+
+const isRetryableReminderSendError = (error: unknown) => classifyReminderSendError(error) === 'network';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const sendTelegramReminderMessageWithRetry = async (recipient: ReminderRecipient, text: string, maxAttempts = 3) => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            await bot.api.sendMessage(String(recipient.telegramUserId), text);
+            if (attempt > 1) {
+                console.log(`[telegram-reminder] send succeeded after retry user=${recipient.telegramUserId} timezone=${recipient.reminderTimezone} attempt=${attempt}/${maxAttempts}`);
+            }
+            return;
+        } catch (error) {
+            lastError = error;
+            const kind = classifyReminderSendError(error);
+            console.error(`[telegram-reminder] send failed user=${recipient.telegramUserId} timezone=${recipient.reminderTimezone} attempt=${attempt}/${maxAttempts} kind=${kind}`, error);
+
+            if (attempt === maxAttempts || !isRetryableReminderSendError(error)) {
+                throw error;
+            }
+
+            await sleep(attempt === 1 ? 300 : 800);
+        }
+    }
+
+    throw lastError;
 };
 
 const buildReminderText = (reminderTimezone: string) => {
@@ -81,7 +142,7 @@ const sendReminderToTelegramUsers = async (recipients: ReminderRecipient[]) => {
     let success = 0;
     for (const recipient of recipients) {
         try {
-            await bot.api.sendMessage(String(recipient.telegramUserId), buildReminderText(recipient.reminderTimezone));
+            await sendTelegramReminderMessageWithRetry(recipient, buildReminderText(recipient.reminderTimezone));
             success += 1;
             await new Promise((resolve) => setTimeout(resolve, 50));
         } catch (error) {

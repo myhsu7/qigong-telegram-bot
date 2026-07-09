@@ -3,6 +3,7 @@ import { Lunar } from 'lunar-javascript';
 import { db } from '../db';
 import { getUserStats } from './stats';
 import { getMethodTaxonomy } from './taxonomy';
+import { getSanFuPeriod } from '../utils/sanfu';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -204,20 +205,17 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
     }
 
     // Seasonal summer
-    const summerSolsticeStr = getJieQiDateStr(currentYear, '夏至');
-    if (summerSolsticeStr) {
-        const summerSolstice = moment.tz(summerSolsticeStr, TIMEZONE);
-        if (now.diff(summerSolstice, 'days') === 27) {
-            const { rows } = await db.query(
-                `SELECT COUNT(*) AS count
-                 FROM telegram_checkin_logs
-                 WHERE telegram_user_id = $1 AND checkin_date >= $2 AND checkin_date <= $3`,
-                [telegramUserId, summerSolstice.format('YYYY-MM-DD'), now.format('YYYY-MM-DD')]
-            );
-            if (parseInt(rows[0].count, 10) >= 27) {
-                const badge = await awardBadge(telegramUserId, 'seasonal_summer_27', currentYear);
-                if (badge) unlocked.push(badge);
-            }
+    const sanFuPeriod = getSanFuPeriod(currentYear);
+    if (sanFuPeriod && now.isSame(sanFuPeriod.end, 'day')) {
+        const { rows } = await db.query(
+            `SELECT COUNT(*) AS count
+             FROM telegram_checkin_logs
+             WHERE telegram_user_id = $1 AND checkin_date >= $2 AND checkin_date <= $3`,
+            [telegramUserId, sanFuPeriod.start.format('YYYY-MM-DD'), sanFuPeriod.end.format('YYYY-MM-DD')]
+        );
+        if (parseInt(rows[0].count, 10) >= sanFuPeriod.totalDays) {
+            const badge = await awardBadge(telegramUserId, 'seasonal_summer_27', currentYear);
+            if (badge) unlocked.push(badge);
         }
     }
 

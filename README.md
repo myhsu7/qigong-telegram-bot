@@ -371,7 +371,7 @@ The corresponding server routes also log load duration in milliseconds so interm
   - Streak badges: 3 / 7 / 21 / 100 days
   - Total day badges: 10 / 100 days
   - Time-based badges: morning / night consistency
-  - Seasonal badges: 夏練三伏 / 冬練三九 (annual repeatable)
+- Seasonal badges: 夏練三伏（依當年三伏全程計算） / 冬練三九（27天） (annual repeatable)
 - Badges are only evaluated on the first successful check-in of a day. Same-day overwrite updates content only and does not re-add total days.
 
 ## Next implementation steps

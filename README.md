@@ -91,6 +91,20 @@ TELEGRAM_REMINDER_ENABLED=true
 TELEGRAM_REMINDER_HOUR=20
 ```
 
+Optional local LLM method reviews use an OpenAI-compatible API. Reviews are used by `/method30`, `/method90`, and the Admin user method analysis; disabled, ineligible, timed-out, or failed requests automatically use the existing rule-based review.
+
+```ini
+LOCAL_LLM_ENABLED=false
+LOCAL_LLM_BASE_URL=http://127.0.0.1:11434/v1
+LOCAL_LLM_API_KEY=dummy
+LOCAL_LLM_MODEL=your_model_name
+LOCAL_LLM_TIMEOUT_MS=5000
+LOCAL_LLM_CRITERIA=30
+```
+
+`LOCAL_LLM_CRITERIA` is the minimum lifetime check-in count required before an LLM review is generated. Set it to `0` to disable the lifetime gate.
+`LOCAL_LLM_TIMEOUT_MS` is capped at 7000ms so Bot replies remain within the Telegram webhook processing budget.
+
 4. Start the app so the webhook endpoint is available:
 
 ```bash

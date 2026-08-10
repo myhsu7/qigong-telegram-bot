@@ -1,9 +1,10 @@
 import { Request, Router } from 'express';
 import path from 'path';
 import moment from 'moment-timezone';
-import { getCommunityMethodMix, getCommunityPracticeJournal, getUserMethodMix, getUserPracticeJournal, searchTelegramUsers } from '../services/methodAnalysis';
+import { buildMethodReview, getCommunityMethodMix, getCommunityPracticeJournal, getUserMethodMix, getUserPracticeJournal, searchTelegramUsers } from '../services/methodAnalysis';
 import { getAdminBadgeAchievements } from '../services/badges';
 import { AdminLeaderboardLimit, getAdminLifetimeLeaderboard, getAdminPeriodStreaks, getCheckedInUsersByDate, getOverviewStats, getPendingUsersByDate } from '../services/stats';
+import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
 
 const router = Router();
 
@@ -97,7 +98,8 @@ router.get('/api/method-analysis/user', async (req, res) => {
             getUserMethodMix(userId, 90),
             getUserPracticeJournal(userId)
         ]);
-        res.json({ analysis30, analysis90, journal });
+        const reviewText = await generateMethodReviewWithLlm(analysis30, buildMethodReview(analysis30), userId);
+        res.json({ analysis30, analysis90, reviewText, journal });
     } catch (error) {
         console.error('[admin] user analysis failed', error);
         res.status(500).json({ error: 'Failed to load user analysis' });

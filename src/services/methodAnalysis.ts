@@ -307,7 +307,20 @@ export const getUserMethodMix = async (telegramUserId: number, periodDays: numbe
     return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays, telegramUserId));
 };
 
-export const buildMethodMixMessage = (result: MethodMixResult) => {
+export const buildMethodReview = (result: MethodMixResult) => {
+    const primaryMethods = result.groupMethods.length > 0 ? result.groupMethods : result.leafMethods;
+
+    if (result.totalCheckinDays === 0 || primaryMethods.length === 0) {
+        return `最近 ${result.periodDays} 天尚無足夠功法打卡資料。`;
+    }
+
+    const topMethod = primaryMethods[0];
+    return topMethod.compositionRatio >= 0.6
+        ? `你最近以「${topMethod.methodName}」為主，練功重心很明確，節奏穩定。`
+        : '你最近的功法分布相當均衡，整體配置很不錯。';
+};
+
+export const buildMethodMixMessage = (result: MethodMixResult, reviewText = buildMethodReview(result)) => {
     const primaryMethods = result.groupMethods.length > 0 ? result.groupMethods : result.leafMethods;
 
     if (result.totalCheckinDays === 0 || primaryMethods.length === 0) {
@@ -320,13 +333,8 @@ export const buildMethodMixMessage = (result: MethodMixResult) => {
         msg += `${index + 1}. ${method.methodName}：${(method.compositionRatio * 100).toFixed(1)}%（${method.matchedDays} 天）\n`;
     });
 
-    const topMethod = primaryMethods[0];
     msg += `\n💡 小點評：\n`;
-    if (topMethod.compositionRatio >= 0.6) {
-        msg += `你最近以「${topMethod.methodName}」為主，練功重心很明確，節奏穩定。`;
-    } else {
-        msg += `你最近的功法分布相當均衡，整體配置很不錯。`;
-    }
+    msg += reviewText;
 
     return msg.trim();
 };

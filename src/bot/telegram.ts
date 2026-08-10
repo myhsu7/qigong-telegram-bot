@@ -2,7 +2,8 @@ import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
 import { env } from '../config/env';
 import { upsertTelegramUser } from '../services/checkin';
 import { buildBadgesMessage, buildEnhancedUserStatsMessage, buildLeaderboardMessage, getUserStats } from '../services/stats';
-import { buildMethodMixMessage, getUserMethodMix } from '../services/methodAnalysis';
+import { buildMethodMixMessage, buildMethodReview, getUserMethodMix } from '../services/methodAnalysis';
+import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
 import { getTelegramReminderSettings, sendTelegramReminderPreview, updateTelegramReminderSettings } from '../services/reminders';
 import { buildWebAppCheckinSummary } from '../services/chatSummary';
 import moment from 'moment-timezone';
@@ -127,14 +128,16 @@ bot.command('method30', async (ctx) => {
     await ensureUser(ctx);
     if (!ctx.from) return;
     const result = await getUserMethodMix(ctx.from.id, 30);
-    await ctx.reply(buildMethodMixMessage(result));
+    const review = await generateMethodReviewWithLlm(result, buildMethodReview(result), ctx.from.id);
+    await ctx.reply(buildMethodMixMessage(result, review));
 });
 
 bot.command('method90', async (ctx) => {
     await ensureUser(ctx);
     if (!ctx.from) return;
     const result = await getUserMethodMix(ctx.from.id, 90);
-    await ctx.reply(buildMethodMixMessage(result));
+    const review = await generateMethodReviewWithLlm(result, buildMethodReview(result), ctx.from.id);
+    await ctx.reply(buildMethodMixMessage(result, review));
 });
 
 bot.command('remind', async (ctx) => {

@@ -15,6 +15,12 @@ for (const key of required) {
     }
 }
 
+const parseBoundedInteger = (value: string | undefined, fallback: number, min: number, max: number) => {
+    if (!value || !/^\d+$/.test(value)) return fallback;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+};
+
 export const env = {
     port: parseInt(process.env.PORT || '3001', 10),
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
@@ -25,5 +31,11 @@ export const env = {
     databaseUrl: process.env.DATABASE_URL || '',
     telegramWebappAuthDisabled: process.env.TELEGRAM_WEBAPP_AUTH_DISABLED === 'true',
     telegramReminderEnabled: process.env.TELEGRAM_REMINDER_ENABLED === 'true',
-    telegramReminderHour: parseInt(process.env.TELEGRAM_REMINDER_HOUR || '20', 10)
+    telegramReminderHour: parseInt(process.env.TELEGRAM_REMINDER_HOUR || '20', 10),
+    localLlmEnabled: process.env.LOCAL_LLM_ENABLED === 'true',
+    localLlmBaseUrl: (process.env.LOCAL_LLM_BASE_URL || '').replace(/\/$/, ''),
+    localLlmApiKey: process.env.LOCAL_LLM_API_KEY || 'dummy',
+    localLlmModel: process.env.LOCAL_LLM_MODEL || '',
+    localLlmTimeoutMs: parseBoundedInteger(process.env.LOCAL_LLM_TIMEOUT_MS, 5000, 1, 7000),
+    localLlmCriteria: parseBoundedInteger(process.env.LOCAL_LLM_CRITERIA, 30, 0, Number.MAX_SAFE_INTEGER)
 };

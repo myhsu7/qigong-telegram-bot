@@ -94,6 +94,10 @@
               <table id="table90"></table>
             </div>
           </div>
+          <div class="note-box" style="margin-top:16px;">
+            <div class="note-label">練功點評</div>
+            <div id="reviewText" class="muted">請先搜尋並選擇學員。</div>
+          </div>
         </div>
 
         <div class="card" style="margin-top:20px;">
@@ -172,6 +176,7 @@
     const renderUserTables = () => {
       renderMethodTable(document.getElementById('table30'), currentUserData?.analysis30 || null);
       renderMethodTable(document.getElementById('table90'), currentUserData?.analysis90 || null);
+      document.getElementById('reviewText').textContent = currentUserData?.reviewText || '目前沒有可顯示的點評。';
     };
 
     const renderJournal = (entries) => {

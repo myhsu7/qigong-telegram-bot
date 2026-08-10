@@ -313,3 +313,97 @@ export const getGroupedUserBadges = async (telegramUserId: number): Promise<Grou
 
     return Array.from(grouped.values());
 };
+
+export interface AdminBadgeRecipient {
+    telegramUserId: number;
+    displayName: string;
+    earnedYears: number[];
+    needsDisambiguation: boolean;
+}
+
+export interface AdminBadgeAchievement {
+    badgeId: string;
+    name: string;
+    emoji: string;
+    description: string;
+    category: string;
+    recipientCount: number;
+    recipients: AdminBadgeRecipient[];
+}
+
+export const getAdminBadgeAchievements = async (): Promise<AdminBadgeAchievement[]> => {
+    const { rows } = await db.query(`
+        WITH recipient_awards AS (
+            SELECT badge_id,
+                   telegram_user_id,
+                   ARRAY_AGG(DISTINCT earned_year ORDER BY earned_year)
+                       FILTER (WHERE earned_year <> 0) AS earned_years
+            FROM telegram_user_badges
+            GROUP BY badge_id, telegram_user_id
+        )
+        SELECT b.id AS badge_id, b.name, b.emoji, b.description, b.category,
+               ra.telegram_user_id, ra.earned_years,
+               u.username, u.first_name, u.last_name
+        FROM telegram_badges b
+        LEFT JOIN recipient_awards ra ON ra.badge_id = b.id
+        LEFT JOIN telegram_users u ON u.telegram_user_id = ra.telegram_user_id
+        ORDER BY
+            CASE b.category
+                WHEN 'STREAK' THEN 1
+                WHEN 'TOTAL' THEN 2
+                WHEN 'TIME_BASED' THEN 3
+                WHEN 'SEASONAL' THEN 4
+                WHEN 'COMBO' THEN 5
+                WHEN 'METHOD_DAYS' THEN 6
+                ELSE 99
+            END,
+            REGEXP_REPLACE(b.id, '_[0-9]+$', ''),
+            COALESCE(NULLIF(SUBSTRING(b.id FROM '_([0-9]+)$'), '')::integer, 0),
+            b.id,
+            u.first_name ASC NULLS LAST,
+            ra.telegram_user_id
+    `);
+    const badges = new Map<string, AdminBadgeAchievement>();
+
+    rows.forEach((row) => {
+        let badge = badges.get(row.badge_id);
+        if (!badge) {
+            badge = {
+                badgeId: row.badge_id,
+                name: row.name,
+                emoji: row.emoji || '',
+                description: row.description || '',
+                category: row.category,
+                recipientCount: 0,
+                recipients: []
+            };
+            badges.set(row.badge_id, badge);
+        }
+        if (row.telegram_user_id) {
+            const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
+            badge.recipients.push({
+                telegramUserId: Number(row.telegram_user_id),
+                displayName: fullName || (row.username ? `@${row.username}` : ''),
+                earnedYears: Array.isArray(row.earned_years)
+                    ? row.earned_years.map((year: number | string) => Number(year)).filter(Number.isFinite)
+                    : [],
+                needsDisambiguation: false
+            });
+        }
+    });
+
+    badges.forEach((badge) => {
+        const names = new Map<string, number>();
+        badge.recipients.forEach((recipient) => {
+            const key = recipient.displayName.trim().toLocaleLowerCase();
+            if (key) names.set(key, (names.get(key) || 0) + 1);
+        });
+        badge.recipients.forEach((recipient) => {
+            const key = recipient.displayName.trim().toLocaleLowerCase();
+            recipient.needsDisambiguation = !key || (names.get(key) || 0) > 1;
+        });
+        badge.recipientCount = badge.recipients.length;
+    });
+
+    return Array.from(badges.values());
+};

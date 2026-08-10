@@ -37,7 +37,10 @@
     .pager{display:flex;align-items:center;gap:8px;margin-top:12px}
     .pager button{padding:6px 12px;font-size:14px}
     .pager .info{color:#6b7280;font-size:14px}
-    @media(max-width:700px){.today-grid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}}
+    .date-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .date-controls input{padding:9px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff}
+    .range-label{color:#6b7280;font-size:14px;margin-top:10px;text-align:right}
+    @media(max-width:700px){.layout{grid-template-columns:1fr}.today-grid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.row{align-items:flex-start;flex-direction:column}.range-label{text-align:left}}
   </style>
 </head>
 <body>
@@ -46,6 +49,8 @@
       <h2 style="margin-top:0;">Telegram Admin</h2>
       <a href="/telegram/admin" class="active">總覽</a>
       <a href="/telegram/admin/leaderboard">排行榜</a>
+      <a href="/telegram/admin/achievements">成就榜</a>
+      <a href="/telegram/admin/journals">學員心得流</a>
       <a href="/telegram/admin/method-analysis">功法分析</a>
     </aside>
     <main class="content">
@@ -58,26 +63,32 @@
           <button data-period="year" class="ghost">本年</button>
         </div>
       </div>
+      <div class="date-controls" style="margin-top:16px;justify-content:flex-end;">
+        <button id="previousDate" class="ghost" type="button">← 前一日</button>
+        <input id="targetDate" type="date" aria-label="選擇日期" />
+        <button id="nextDate" class="ghost" type="button">後一日 →</button>
+      </div>
+      <div id="rangeLabel" class="range-label"></div>
 
       <div class="today-grid">
         <div class="today-card checked" id="checkedInCard">
-          <div class="label">今日已打卡</div>
+          <div class="label" id="checkedInLabel">已打卡</div>
           <div class="value" id="checkedInCount">-</div>
         </div>
         <div class="today-card pending" id="pendingCard">
-          <div class="label">今日尚未打卡</div>
+          <div class="label" id="pendingLabel">尚未打卡</div>
           <div class="value" id="pendingCount">-</div>
         </div>
       </div>
 
       <div class="card" id="checkedInPanel" style="display:none;">
-        <h2 style="margin-top:0;">今日已打卡人員</h2>
+        <h2 style="margin-top:0;" id="checkedInTitle">已打卡人員</h2>
         <div id="checkedInList" class="user-list"></div>
         <div class="pager" id="checkedInPager"></div>
       </div>
 
       <div class="card" id="pendingPanel" style="display:none;">
-        <h2 style="margin-top:0;">今日尚未打卡人員</h2>
+        <h2 style="margin-top:0;" id="pendingTitle">尚未打卡人員</h2>
         <div id="pendingList" class="user-list"></div>
         <div class="pager" id="pendingPager"></div>
       </div>
@@ -96,12 +107,30 @@
   </div>
   <script>
     let currentPeriod = 'week';
+    const taipeiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
+    let selectedDate = taipeiToday;
+    let overviewRequestVersion = 0;
     let chart;
     const buttons = [...document.querySelectorAll('[data-period]')];
     const setActive = () => buttons.forEach(btn => btn.className = btn.dataset.period === currentPeriod ? '' : 'ghost');
 
     const escapeHtml = (value) => String(value || '')
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    const shiftDate = (date, days) => {
+      const [year, month, day] = date.split('-').map(Number);
+      const shifted = new Date(Date.UTC(year, month - 1, day + days));
+      return shifted.toISOString().slice(0, 10);
+    };
+
+    const updateDateLabels = () => {
+      const dayLabel = selectedDate === taipeiToday ? '今日' : selectedDate;
+      document.getElementById('targetDate').value = selectedDate;
+      document.getElementById('checkedInLabel').textContent = `${dayLabel}已打卡`;
+      document.getElementById('pendingLabel').textContent = `${dayLabel}尚未打卡`;
+      document.getElementById('checkedInTitle').textContent = `${dayLabel}已打卡人員`;
+      document.getElementById('pendingTitle').textContent = `${dayLabel}尚未打卡人員`;
+    };
 
     const renderUserList = (listEl, users) => {
       listEl.innerHTML = '';
@@ -139,44 +168,55 @@
     };
 
     const loadCheckedIn = async (page = 1) => {
-      const res = await fetch(`/telegram/admin/api/today-checkins?page=${page}&limit=20`);
+      const requestedDate = selectedDate;
+      const res = await fetch(`/telegram/admin/api/today-checkins?date=${encodeURIComponent(requestedDate)}&page=${page}&limit=20`);
+      if (!res.ok) throw new Error('Failed to load checked-in users');
       const data = await res.json();
+      if (requestedDate !== selectedDate) return;
       document.getElementById('checkedInCount').textContent = `${data.total} 人`;
       renderUserList(document.getElementById('checkedInList'), data.users);
       renderPager(document.getElementById('checkedInPager'), data.page, data.totalPages, loadCheckedIn);
     };
 
     const loadPending = async (page = 1) => {
-      const res = await fetch(`/telegram/admin/api/today-pending?page=${page}&limit=20`);
+      const requestedDate = selectedDate;
+      const res = await fetch(`/telegram/admin/api/today-pending?date=${encodeURIComponent(requestedDate)}&page=${page}&limit=20`);
+      if (!res.ok) throw new Error('Failed to load pending users');
       const data = await res.json();
+      if (requestedDate !== selectedDate) return;
       document.getElementById('pendingCount').textContent = `${data.total} 人`;
       renderUserList(document.getElementById('pendingList'), data.users);
       renderPager(document.getElementById('pendingPager'), data.page, data.totalPages, loadPending);
     };
 
-    const togglePanel = (panelId) => {
-      const panel = document.getElementById(panelId);
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    };
-
     document.getElementById('checkedInCard').onclick = () => {
-      togglePanel('checkedInPanel');
-      togglePanel('pendingPanel');
-      if (document.getElementById('checkedInPanel').style.display !== 'none') loadCheckedIn(1);
+      const panel = document.getElementById('checkedInPanel');
+      const shouldOpen = panel.style.display === 'none';
+      panel.style.display = shouldOpen ? 'block' : 'none';
+      document.getElementById('pendingPanel').style.display = 'none';
+      if (shouldOpen) loadCheckedIn(1);
     };
 
     document.getElementById('pendingCard').onclick = () => {
-      togglePanel('pendingPanel');
-      togglePanel('checkedInPanel');
-      if (document.getElementById('pendingPanel').style.display !== 'none') loadPending(1);
+      const panel = document.getElementById('pendingPanel');
+      const shouldOpen = panel.style.display === 'none';
+      panel.style.display = shouldOpen ? 'block' : 'none';
+      document.getElementById('checkedInPanel').style.display = 'none';
+      if (shouldOpen) loadPending(1);
     };
 
     const load = async () => {
-      const res = await fetch(`/telegram/admin/api/overview?period=${currentPeriod}`);
+      const requestVersion = ++overviewRequestVersion;
+      const requestedPeriod = currentPeriod;
+      const requestedDate = selectedDate;
+      const res = await fetch(`/telegram/admin/api/overview?period=${requestedPeriod}&date=${encodeURIComponent(requestedDate)}`);
+      if (!res.ok) throw new Error('Failed to load overview');
       const data = await res.json();
+      if (requestVersion !== overviewRequestVersion || requestedPeriod !== currentPeriod || requestedDate !== selectedDate) return;
       document.getElementById('activeUsers').textContent = data.kpis.activeUsers;
       document.getElementById('totalCheckins').textContent = data.kpis.totalCheckins;
       document.getElementById('avgDailyCheckins').textContent = data.kpis.avgDailyCheckins;
+      document.getElementById('rangeLabel').textContent = `統計期間：${data.range.startDate} ～ ${data.range.endDate}`;
       if (chart) chart.destroy();
       chart = new Chart(document.getElementById('trendChart').getContext('2d'), {
         type: 'line',
@@ -188,11 +228,23 @@
       });
     };
 
+    const loadSelectedDate = async () => {
+      updateDateLabels();
+      document.getElementById('checkedInPanel').style.display = 'none';
+      document.getElementById('pendingPanel').style.display = 'none';
+      await Promise.all([load(), loadCheckedIn(1), loadPending(1)]);
+    };
+
     buttons.forEach(btn => btn.onclick = () => { currentPeriod = btn.dataset.period; setActive(); load(); });
+    document.getElementById('previousDate').onclick = () => { selectedDate = shiftDate(selectedDate, -1); loadSelectedDate(); };
+    document.getElementById('nextDate').onclick = () => { selectedDate = shiftDate(selectedDate, 1); loadSelectedDate(); };
+    document.getElementById('targetDate').onchange = (event) => {
+      if (!event.target.value) return;
+      selectedDate = event.target.value;
+      loadSelectedDate();
+    };
     setActive();
-    load();
-    loadCheckedIn(1);
-    loadPending(1);
+    loadSelectedDate().catch((error) => console.error('[admin-overview] load failed', error));
   </script>
 </body>
 </html>

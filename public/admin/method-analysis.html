@@ -49,6 +49,8 @@
       <h2 style="margin-top:0;">Telegram Admin</h2>
       <a href="/telegram/admin">總覽</a>
       <a href="/telegram/admin/leaderboard">排行榜</a>
+      <a href="/telegram/admin/achievements">成就榜</a>
+      <a href="/telegram/admin/journals">學員心得流</a>
       <a href="/telegram/admin/method-analysis" class="active">功法分析</a>
     </aside>
     <main class="content">
@@ -145,7 +147,7 @@
       }
       let html = '<thead><tr><th>功法</th><th>天數</th><th>配比</th><th>出席率</th></tr></thead><tbody>';
       items.forEach((m) => {
-        html += `<tr><td>${m.methodName}</td><td>${m.matchedDays}</td><td>${(m.compositionRatio * 100).toFixed(1)}%</td><td>${(m.attendanceRatio * 100).toFixed(1)}%</td></tr>`;
+        html += `<tr><td>${escapeHtml(m.methodName)}</td><td>${m.matchedDays}</td><td>${(m.compositionRatio * 100).toFixed(1)}%</td><td>${(m.attendanceRatio * 100).toFixed(1)}%</td></tr>`;
       });
       html += '</tbody>';
       el.innerHTML = html;

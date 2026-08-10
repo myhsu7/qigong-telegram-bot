@@ -25,12 +25,50 @@ interface PeriodRange {
     end: Date;
 }
 
-export const getAdminPeriodRange = (period: Exclude<LeaderboardPeriod, 'all'>): PeriodRange => {
-    const range = getPeriodRange(period);
-    if (!range) {
-        throw new Error('Admin period does not support all-time range');
+export interface AdminPeriodRange extends PeriodRange {
+    anchorDate: string;
+    startDate: string;
+    endDate: string;
+    previousDate: string;
+    nextDate: string;
+}
+
+export const getAdminPeriodRange = (period: Exclude<LeaderboardPeriod, 'all'>, anchorDate?: string): AdminPeriodRange => {
+    const anchor = anchorDate
+        ? moment.tz(anchorDate, 'YYYY-MM-DD', true, TIMEZONE)
+        : moment().tz(TIMEZONE);
+    if (!anchor.isValid()) throw new Error('Invalid date. Use YYYY-MM-DD.');
+
+    let start: moment.Moment;
+    let end: moment.Moment;
+    switch (period) {
+        case 'week':
+            start = anchor.clone().startOf('isoWeek');
+            end = start.clone().add(1, 'week');
+            break;
+        case 'month':
+            start = anchor.clone().startOf('month');
+            end = start.clone().add(1, 'month');
+            break;
+        case 'quarter':
+            start = anchor.clone().startOf('quarter');
+            end = start.clone().add(1, 'quarter');
+            break;
+        case 'year':
+            start = anchor.clone().startOf('year');
+            end = start.clone().add(1, 'year');
+            break;
     }
-    return range;
+
+    return {
+        start: start.toDate(),
+        end: end.toDate(),
+        anchorDate: anchor.format('YYYY-MM-DD'),
+        startDate: start.format('YYYY-MM-DD'),
+        endDate: end.clone().subtract(1, 'day').format('YYYY-MM-DD'),
+        previousDate: start.clone().subtract(1, 'day').format('YYYY-MM-DD'),
+        nextDate: end.format('YYYY-MM-DD')
+    };
 };
 
 const getPeriodRange = (period: LeaderboardPeriod): PeriodRange | null => {
@@ -196,40 +234,42 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
     return { totals, streaks };
 };
 
-export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>) => {
-    const { start, end } = getAdminPeriodRange(period);
+export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>, anchorDate?: string) => {
+    const range = getAdminPeriodRange(period, anchorDate);
+    const { startDate, endDate } = range;
+    const endDateExclusive = moment.tz(endDate, 'YYYY-MM-DD', TIMEZONE).add(1, 'day').format('YYYY-MM-DD');
 
     const kpiQuery = `
         SELECT 
             COUNT(DISTINCT telegram_user_id) AS active_users,
             COUNT(*) AS total_checkins
         FROM telegram_checkin_logs
-        WHERE created_at >= $1 AND created_at < $2
+        WHERE checkin_date >= $1::date AND checkin_date < $2::date
     `;
-    const kpiRes = await db.query(kpiQuery, [start, end]);
+    const kpiRes = await db.query(kpiQuery, [startDate, endDateExclusive]);
 
     const activeUsers = parseInt(kpiRes.rows[0]?.active_users || '0', 10);
     const totalCheckins = parseInt(kpiRes.rows[0]?.total_checkins || '0', 10);
-    const daysInPeriod = moment(end).diff(moment(start), 'days') || 1;
+    const daysInPeriod = moment.tz(endDateExclusive, 'YYYY-MM-DD', TIMEZONE).diff(moment.tz(startDate, 'YYYY-MM-DD', TIMEZONE), 'days') || 1;
     const avgDailyCheckins = Number((totalCheckins / daysInPeriod).toFixed(1));
 
     const trendQuery = `
-        SELECT checkin_date, COUNT(*) AS daily_count
+        SELECT checkin_date::text AS checkin_date, COUNT(*) AS daily_count
         FROM telegram_checkin_logs
-        WHERE created_at >= $1 AND created_at < $2
+        WHERE checkin_date >= $1::date AND checkin_date < $2::date
         GROUP BY checkin_date
         ORDER BY checkin_date ASC
     `;
-    const trendRes = await db.query(trendQuery, [start, end]);
+    const trendRes = await db.query(trendQuery, [startDate, endDateExclusive]);
 
     const trendMap = new Map<string, number>();
     trendRes.rows.forEach((row) => {
-        trendMap.set(moment(row.checkin_date).format('YYYY-MM-DD'), parseInt(row.daily_count, 10));
+        trendMap.set(row.checkin_date, parseInt(row.daily_count, 10));
     });
 
     const trend: Array<{ date: string; count: number }> = [];
-    let curr = moment(start);
-    const stop = moment(end).subtract(1, 'day');
+    let curr = moment.tz(startDate, 'YYYY-MM-DD', TIMEZONE);
+    const stop = moment.tz(endDate, 'YYYY-MM-DD', TIMEZONE);
     while (curr <= stop) {
         const key = curr.format('YYYY-MM-DD');
         trend.push({ date: key, count: trendMap.get(key) || 0 });
@@ -237,6 +277,13 @@ export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>
     }
 
     return {
+        range: {
+            anchorDate: range.anchorDate,
+            startDate: range.startDate,
+            endDate: range.endDate,
+            previousDate: range.previousDate,
+            nextDate: range.nextDate
+        },
         kpis: { activeUsers, totalCheckins, avgDailyCheckins },
         trend
     };
@@ -252,20 +299,21 @@ export interface TodayCheckinPage {
     page: number;
     limit: number;
     totalPages: number;
+    date: string;
+    isToday: boolean;
     users: TodayCheckinUser[];
 }
 
 const getTodayDateStr = () => moment().tz(TIMEZONE).format('YYYY-MM-DD');
 
-export const getTodayCheckedInUsers = async (page = 1, limit = 20): Promise<TodayCheckinPage> => {
-    const today = getTodayDateStr();
+export const getCheckedInUsersByDate = async (date: string, page = 1, limit = 20): Promise<TodayCheckinPage> => {
     const offset = (page - 1) * limit;
 
     const countRes = await db.query(
         `SELECT COUNT(DISTINCT telegram_user_id) AS total
          FROM telegram_checkin_logs
          WHERE checkin_date = $1`,
-        [today]
+        [date]
     );
     const total = parseInt(countRes.rows[0]?.total || '0', 10);
 
@@ -277,7 +325,7 @@ export const getTodayCheckedInUsers = async (page = 1, limit = 20): Promise<Toda
          GROUP BY u.telegram_user_id, u.first_name, u.last_name, u.username
          ORDER BY MAX(l.created_at) DESC
          LIMIT $2 OFFSET $3`,
-        [today, limit, offset]
+        [date, limit, offset]
     );
 
     return {
@@ -285,6 +333,8 @@ export const getTodayCheckedInUsers = async (page = 1, limit = 20): Promise<Toda
         page,
         limit,
         totalPages: Math.max(1, Math.ceil(total / limit)),
+        date,
+        isToday: date === getTodayDateStr(),
         users: rows.map((row) => ({
             telegramUserId: Number(row.telegram_user_id),
             displayName: getDisplayName(row)
@@ -292,18 +342,18 @@ export const getTodayCheckedInUsers = async (page = 1, limit = 20): Promise<Toda
     };
 };
 
-export const getTodayPendingUsers = async (page = 1, limit = 20): Promise<TodayCheckinPage> => {
-    const today = getTodayDateStr();
+export const getPendingUsersByDate = async (date: string, page = 1, limit = 20): Promise<TodayCheckinPage> => {
     const offset = (page - 1) * limit;
 
     const countRes = await db.query(
         `SELECT COUNT(*) AS total
          FROM telegram_users u
          WHERE NOT EXISTS (
-             SELECT 1 FROM telegram_checkin_logs l
-             WHERE l.telegram_user_id = u.telegram_user_id AND l.checkin_date = $1
-         )`,
-        [today]
+              SELECT 1 FROM telegram_checkin_logs l
+              WHERE l.telegram_user_id = u.telegram_user_id AND l.checkin_date = $1
+          )
+            AND (u.created_at AT TIME ZONE $2)::date <= $1::date`,
+        [date, TIMEZONE]
     );
     const total = parseInt(countRes.rows[0]?.total || '0', 10);
 
@@ -311,12 +361,13 @@ export const getTodayPendingUsers = async (page = 1, limit = 20): Promise<TodayC
         `SELECT u.telegram_user_id, u.first_name, u.last_name, u.username
          FROM telegram_users u
          WHERE NOT EXISTS (
-             SELECT 1 FROM telegram_checkin_logs l
-             WHERE l.telegram_user_id = u.telegram_user_id AND l.checkin_date = $1
-         )
-         ORDER BY u.first_name ASC, u.telegram_user_id ASC
-         LIMIT $2 OFFSET $3`,
-        [today, limit, offset]
+              SELECT 1 FROM telegram_checkin_logs l
+              WHERE l.telegram_user_id = u.telegram_user_id AND l.checkin_date = $1
+          )
+            AND (u.created_at AT TIME ZONE $2)::date <= $1::date
+          ORDER BY u.first_name ASC, u.telegram_user_id ASC
+          LIMIT $3 OFFSET $4`,
+        [date, TIMEZONE, limit, offset]
     );
 
     return {
@@ -324,11 +375,133 @@ export const getTodayPendingUsers = async (page = 1, limit = 20): Promise<TodayC
         page,
         limit,
         totalPages: Math.max(1, Math.ceil(total / limit)),
+        date,
+        isToday: date === getTodayDateStr(),
         users: rows.map((row) => ({
             telegramUserId: Number(row.telegram_user_id),
             displayName: getDisplayName(row)
         }))
     };
+};
+
+export const getTodayCheckedInUsers = (page = 1, limit = 20) => getCheckedInUsersByDate(getTodayDateStr(), page, limit);
+export const getTodayPendingUsers = (page = 1, limit = 20) => getPendingUsersByDate(getTodayDateStr(), page, limit);
+
+export interface AdminLifetimeLeaderboardRow {
+    telegramUserId: number;
+    displayName: string;
+    totalDays: number;
+    currentStreak: number;
+    lastCheckinDate: string | null;
+}
+
+export interface AdminLifetimeLeaderboardPage {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    rows: AdminLifetimeLeaderboardRow[];
+}
+
+export const getAdminLifetimeLeaderboard = async (page = 1, limit = 20): Promise<AdminLifetimeLeaderboardPage> => {
+    const offset = (page - 1) * limit;
+    const countRes = await db.query('SELECT COUNT(*) AS total FROM telegram_users');
+    const total = parseInt(countRes.rows[0]?.total || '0', 10);
+    const { rows } = await db.query(
+        `WITH numbered_dates AS (
+             SELECT telegram_user_id,
+                    checkin_date,
+                    checkin_date - ROW_NUMBER() OVER (PARTITION BY telegram_user_id ORDER BY checkin_date)::int AS island
+             FROM telegram_checkin_logs
+         ),
+         streak_runs AS (
+             SELECT telegram_user_id, island, COUNT(*)::int AS streak_days, MAX(checkin_date) AS run_end
+             FROM numbered_dates
+             GROUP BY telegram_user_id, island
+         ),
+         latest_runs AS (
+             SELECT DISTINCT ON (telegram_user_id) telegram_user_id, streak_days, run_end
+             FROM streak_runs
+             ORDER BY telegram_user_id, run_end DESC
+         ),
+         totals AS (
+             SELECT telegram_user_id, COUNT(*)::int AS total_days, MAX(checkin_date) AS last_checkin_date
+             FROM telegram_checkin_logs
+             GROUP BY telegram_user_id
+         )
+         SELECT u.telegram_user_id, u.username, u.first_name, u.last_name,
+                COALESCE(t.total_days, 0) AS total_days,
+                CASE
+                    WHEN lr.run_end >= ((CURRENT_TIMESTAMP AT TIME ZONE $3)::date - 1) THEN lr.streak_days
+                    ELSE 0
+                END AS current_streak,
+                t.last_checkin_date::text AS last_checkin_date
+         FROM telegram_users u
+         LEFT JOIN totals t ON t.telegram_user_id = u.telegram_user_id
+         LEFT JOIN latest_runs lr ON lr.telegram_user_id = u.telegram_user_id
+         ORDER BY COALESCE(t.total_days, 0) DESC,
+                  CASE
+                      WHEN lr.run_end >= ((CURRENT_TIMESTAMP AT TIME ZONE $3)::date - 1) THEN lr.streak_days
+                      ELSE 0
+                  END DESC,
+                  u.first_name ASC NULLS LAST, u.telegram_user_id ASC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset, TIMEZONE]
+    );
+
+    return {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        rows: rows.map((row) => ({
+            telegramUserId: Number(row.telegram_user_id),
+            displayName: getDisplayName(row),
+            totalDays: Number(row.total_days || 0),
+            currentStreak: Number(row.current_streak || 0),
+            lastCheckinDate: row.last_checkin_date || null
+        }))
+    };
+};
+
+export type AdminLeaderboardLimit = 10 | 20 | 30;
+
+export const getAdminPeriodStreaks = async (
+    period: Exclude<LeaderboardPeriod, 'all'>,
+    limit: AdminLeaderboardLimit = 10
+) => {
+    const { startDate, endDate } = getAdminPeriodRange(period);
+    const endDateExclusive = moment.tz(endDate, 'YYYY-MM-DD', TIMEZONE).add(1, 'day').format('YYYY-MM-DD');
+    const { rows } = await db.query(
+        `WITH numbered_dates AS (
+             SELECT telegram_user_id,
+                    checkin_date,
+                    checkin_date - ROW_NUMBER() OVER (PARTITION BY telegram_user_id ORDER BY checkin_date)::int AS island
+             FROM telegram_checkin_logs
+             WHERE checkin_date >= $1::date AND checkin_date < $2::date
+         ),
+         streak_runs AS (
+             SELECT telegram_user_id, island, COUNT(*)::int AS streak_days
+             FROM numbered_dates
+             GROUP BY telegram_user_id, island
+         ),
+         max_streaks AS (
+             SELECT telegram_user_id, MAX(streak_days)::int AS max_streak
+             FROM streak_runs
+             GROUP BY telegram_user_id
+         )
+         SELECT m.telegram_user_id, u.username, u.first_name, u.last_name, m.max_streak
+         FROM max_streaks m
+         JOIN telegram_users u ON u.telegram_user_id = m.telegram_user_id
+         ORDER BY m.max_streak DESC, u.first_name ASC NULLS LAST, m.telegram_user_id ASC
+         LIMIT $3`,
+        [startDate, endDateExclusive, limit]
+    );
+    return rows.map((row) => ({
+        telegramUserId: Number(row.telegram_user_id),
+        displayName: getDisplayName(row),
+        maxStreak: Number(row.max_streak || 0)
+    }));
 };
 
 export const buildUserStatsMessage = (stats: UserStats) => {

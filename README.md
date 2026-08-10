@@ -206,12 +206,18 @@ remindtest - 手動補發提醒（測試用）
 
 - Overview: `GET /telegram/admin`
 - Leaderboard: `GET /telegram/admin/leaderboard`
+- Achievements: `GET /telegram/admin/achievements`
+- Journal Feed: `GET /telegram/admin/journals`
 - Method Analysis: `GET /telegram/admin/method-analysis`
 
 ### Admin APIs
 
-- `GET /telegram/admin/api/overview?period=week|month|quarter|year`
-- `GET /telegram/admin/api/leaderboard?period=week|month|quarter|year`
+- `GET /telegram/admin/api/overview?period=week|month|quarter|year&date=YYYY-MM-DD`
+- `GET /telegram/admin/api/leaderboard?period=week|month|quarter|year&limit=10|20|30&page=1`
+- `GET /telegram/admin/api/achievements`
+- `GET /telegram/admin/api/journals?page=1&limit=20`
+- `GET /telegram/admin/api/today-checkins?date=YYYY-MM-DD&page=1&limit=20`
+- `GET /telegram/admin/api/today-pending?date=YYYY-MM-DD&page=1&limit=20`
 - `GET /telegram/admin/api/method-analysis/summary?period=30d|90d`
 - `GET /telegram/admin/api/method-analysis/search-users?q=keyword`
 - `GET /telegram/admin/api/method-analysis/user?userId=...`

@@ -1,7 +1,9 @@
 import { Request, Router } from 'express';
 import path from 'path';
-import { getCommunityMethodMix, getUserMethodMix, getUserPracticeJournal, searchTelegramUsers } from '../services/methodAnalysis';
-import { getLeaderboard, getOverviewStats, getTodayCheckedInUsers, getTodayPendingUsers } from '../services/stats';
+import moment from 'moment-timezone';
+import { getCommunityMethodMix, getCommunityPracticeJournal, getUserMethodMix, getUserPracticeJournal, searchTelegramUsers } from '../services/methodAnalysis';
+import { getAdminBadgeAchievements } from '../services/badges';
+import { AdminLeaderboardLimit, getAdminLifetimeLeaderboard, getAdminPeriodStreaks, getCheckedInUsersByDate, getOverviewStats, getPendingUsersByDate } from '../services/stats';
 
 const router = Router();
 
@@ -17,16 +19,28 @@ router.get('/method-analysis', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'dist', 'public', 'admin', 'method-analysis.html'));
 });
 
+router.get('/achievements', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'dist', 'public', 'admin', 'achievements.html'));
+});
+
+router.get('/journals', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'dist', 'public', 'admin', 'journals.html'));
+});
+
 router.get('/api/overview', async (req, res) => {
     try {
         const period = (req.query.period as string) || 'week';
         if (!['week', 'month', 'quarter', 'year'].includes(period)) {
             return res.status(400).json({ error: 'Invalid period' });
         }
-        const data = await getOverviewStats(period as 'week' | 'month' | 'quarter' | 'year');
+        const date = typeof req.query.date === 'string' ? req.query.date : undefined;
+        const data = await getOverviewStats(period as 'week' | 'month' | 'quarter' | 'year', date);
         res.json(data);
     } catch (error) {
         console.error('[admin] overview failed', error);
+        if (error instanceof Error && error.message.startsWith('Invalid date')) {
+            return res.status(400).json({ error: error.message });
+        }
         res.status(500).json({ error: 'Failed to load overview' });
     }
 });
@@ -37,8 +51,13 @@ router.get('/api/leaderboard', async (req, res) => {
         if (!['week', 'month', 'quarter', 'year'].includes(period)) {
             return res.status(400).json({ error: 'Invalid period' });
         }
-        const data = await getLeaderboard(period as 'week' | 'month' | 'quarter' | 'year');
-        res.json(data);
+        const requestedLimit = Number(req.query.limit);
+        const streakLimit: AdminLeaderboardLimit = requestedLimit === 20 || requestedLimit === 30 ? requestedLimit : 10;
+        const [totals, streaks] = await Promise.all([
+            getAdminLifetimeLeaderboard(parsePage(req), 20),
+            getAdminPeriodStreaks(period as 'week' | 'month' | 'quarter' | 'year', streakLimit)
+        ]);
+        res.json({ totals: totals.rows, totalsPage: totals, streaks, streakLimit });
     } catch (error) {
         console.error('[admin] leaderboard failed', error);
         res.status(500).json({ error: 'Failed to load leaderboard' });
@@ -95,23 +114,56 @@ const parseLimit = (req: Request) => {
     return Number.isFinite(limit) && limit > 0 && limit <= 100 ? limit : 20;
 };
 
+const parseTargetDate = (req: Request) => {
+    const value = typeof req.query.date === 'string'
+        ? req.query.date
+        : moment().tz('Asia/Taipei').format('YYYY-MM-DD');
+    const parsed = moment.tz(value, 'YYYY-MM-DD', true, 'Asia/Taipei');
+    if (!parsed.isValid()) throw new Error('Invalid date. Use YYYY-MM-DD.');
+    return parsed.format('YYYY-MM-DD');
+};
+
 router.get('/api/today-checkins', async (req, res) => {
     try {
-        const data = await getTodayCheckedInUsers(parsePage(req), parseLimit(req));
+        const data = await getCheckedInUsersByDate(parseTargetDate(req), parsePage(req), parseLimit(req));
         res.json(data);
     } catch (error) {
         console.error('[admin] today-checkins failed', error);
+        if (error instanceof Error && error.message.startsWith('Invalid date')) {
+            return res.status(400).json({ error: error.message });
+        }
         res.status(500).json({ error: 'Failed to load today checkins' });
     }
 });
 
 router.get('/api/today-pending', async (req, res) => {
     try {
-        const data = await getTodayPendingUsers(parsePage(req), parseLimit(req));
+        const data = await getPendingUsersByDate(parseTargetDate(req), parsePage(req), parseLimit(req));
         res.json(data);
     } catch (error) {
         console.error('[admin] today-pending failed', error);
+        if (error instanceof Error && error.message.startsWith('Invalid date')) {
+            return res.status(400).json({ error: error.message });
+        }
         res.status(500).json({ error: 'Failed to load today pending' });
+    }
+});
+
+router.get('/api/achievements', async (_req, res) => {
+    try {
+        res.json({ badges: await getAdminBadgeAchievements() });
+    } catch (error) {
+        console.error('[admin] achievements failed', error);
+        res.status(500).json({ error: 'Failed to load achievements' });
+    }
+});
+
+router.get('/api/journals', async (req, res) => {
+    try {
+        res.json(await getCommunityPracticeJournal(parsePage(req), parseLimit(req)));
+    } catch (error) {
+        console.error('[admin] journals failed', error);
+        res.status(500).json({ error: 'Failed to load journals' });
     }
 });
 

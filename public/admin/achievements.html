@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telegram 成就榜</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f6f7fb;color:#1f2937}
+    .layout{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+    .sidebar{background:#111827;color:#fff;padding:20px}
+    .sidebar a{display:block;color:#fff;text-decoration:none;padding:10px 12px;border-radius:10px;margin-bottom:8px}
+    .sidebar a.active,.sidebar a:hover{background:#374151}
+    .content{padding:24px}
+    .summary{color:#6b7280;margin:0 0 28px}
+    .section{margin-bottom:36px}
+    .section-title{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .section-title h2{margin:0}
+    .count{background:#e5e7eb;border-radius:999px;padding:3px 9px;font-size:13px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+    .card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+    .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+    .badge-title{display:flex;align-items:center;gap:12px}
+    .emoji{font-size:34px;line-height:1}
+    .badge-title h3{margin:0 0 5px}
+    .category{display:inline-block;background:#f3f4f6;color:#4b5563;border-radius:999px;padding:4px 8px;font-size:12px}
+    .recipient-count{background:#0d6efd;color:#fff;border-radius:999px;padding:5px 10px;font-size:13px;white-space:nowrap}
+    .description{color:#6b7280;line-height:1.55;min-height:48px}
+    .recipients{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #eee;padding-top:14px;max-height:250px;overflow:auto}
+    .recipient{display:inline-flex;gap:4px;align-items:center;background:#f3f4f6;color:#111827;text-decoration:none;border-radius:999px;padding:7px 11px}
+    .recipient:hover{background:#e0ecff}
+    .years{color:#2563eb;font-size:12px}
+    .empty{color:#9ca3af}
+    .error{background:#fee2e2;color:#991b1b;padding:14px;border-radius:10px}
+    @media(max-width:900px){.layout{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.content{padding:18px}}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2 style="margin-top:0;">Telegram Admin</h2>
+      <a href="/telegram/admin">總覽</a>
+      <a href="/telegram/admin/leaderboard">排行榜</a>
+      <a href="/telegram/admin/achievements" class="active">成就榜</a>
+      <a href="/telegram/admin/journals">學員心得流</a>
+      <a href="/telegram/admin/method-analysis">功法分析</a>
+    </aside>
+    <main class="content">
+      <h1 style="margin-top:0;">成就榜</h1>
+      <p id="summary" class="summary">載入中...</p>
+      <div id="catalog"></div>
+    </main>
+  </div>
+  <script>
+    const categoryLabels = {
+      STREAK: '連續打卡',
+      TOTAL: '累計打卡',
+      TIME_BASED: '時段挑戰',
+      SEASONAL: '節氣挑戰',
+      COMBO: '全套功法',
+      METHOD_DAYS: '功法里程碑'
+    };
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    const render = (badges) => {
+      document.getElementById('summary').textContent = `共 ${badges.length} 個成就，點擊學員姓名可查看個人功法分析。`;
+      const groups = new Map();
+      badges.forEach((badge) => {
+        const rows = groups.get(badge.category) || [];
+        rows.push(badge);
+        groups.set(badge.category, rows);
+      });
+      document.getElementById('catalog').innerHTML = [...groups.entries()].map(([category, rows]) => `
+        <section class="section">
+          <div class="section-title"><h2>${escapeHtml(categoryLabels[category] || category)}</h2><span class="count">${rows.length}</span></div>
+          <div class="grid">
+            ${rows.map((badge) => {
+              const recipients = (badge.recipients || []).map((recipient) => {
+                const displayName = recipient.displayName || '未知學員';
+                const suffix = recipient.needsDisambiguation ? ` <small>(…${escapeHtml(String(recipient.telegramUserId).slice(-6))})</small>` : '';
+                const years = recipient.earnedYears?.length ? `<span class="years">(${recipient.earnedYears.join('、')})</span>` : '';
+                return `<a class="recipient" href="/telegram/admin/method-analysis?userId=${encodeURIComponent(recipient.telegramUserId)}&name=${encodeURIComponent(displayName)}"><strong>${escapeHtml(displayName)}</strong>${suffix}${years}</a>`;
+              }).join('');
+              return `<article class="card">
+                <div class="card-head">
+                  <div class="badge-title"><span class="emoji">${escapeHtml(badge.emoji || '🏅')}</span><div><h3>${escapeHtml(badge.name)}</h3><span class="category">${escapeHtml(categoryLabels[category] || category)}</span></div></div>
+                  <span class="recipient-count">${Number(badge.recipientCount || 0)} 位得主</span>
+                </div>
+                <p class="description">${escapeHtml(badge.description)}</p>
+                <div class="recipients">${recipients || '<span class="empty">尚無學員取得</span>'}</div>
+              </article>`;
+            }).join('')}
+          </div>
+        </section>
+      `).join('');
+    };
+
+    fetch('/telegram/admin/api/achievements')
+      .then((res) => { if (!res.ok) throw new Error('Failed to load achievements'); return res.json(); })
+      .then((data) => render(data.badges || []))
+      .catch((error) => {
+        console.error('[admin-achievements] load failed', error);
+        document.getElementById('summary').textContent = '';
+        document.getElementById('catalog').innerHTML = '<div class="error">成就資料載入失敗，請稍後再試。</div>';
+      });
+  </script>
+</body>
+</html>

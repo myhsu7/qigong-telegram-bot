@@ -30,6 +30,19 @@ export interface UserPracticeJournalEntry {
     bodyFeelingNote: string;
 }
 
+export interface CommunityPracticeJournalEntry extends UserPracticeJournalEntry {
+    telegramUserId: number;
+    displayName: string;
+}
+
+export interface CommunityPracticeJournalPage {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    entries: CommunityPracticeJournalEntry[];
+}
+
 interface MethodSelectionRow {
     checkinLogId: number;
     methodId: number;
@@ -143,7 +156,7 @@ const getMethodSelectionRows = async (periodDays: number, telegramUserId?: numbe
          FROM telegram_checkin_logs l
          JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
          JOIN practice_methods pm ON pm.id = s.practice_method_id
-         WHERE l.checkin_date >= (CURRENT_DATE - ($1::int - 1))
+         WHERE l.checkin_date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Taipei')::date - ($1::int - 1))
            ${userFilter}
          ORDER BY l.id ASC, pm.sort_order ASC, pm.id ASC`,
         params
@@ -208,11 +221,72 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12)
     });
 };
 
+export const getCommunityPracticeJournal = async (page = 1, limit = 20): Promise<CommunityPracticeJournalPage> => {
+    const taxonomy = await getMethodTaxonomy();
+    const offset = (page - 1) * limit;
+    const journalFilter = `COALESCE(BTRIM(l.reflection_note), '') <> ''
+        OR COALESCE(BTRIM(l.body_feeling_note), '') <> ''`;
+    const countRes = await db.query(
+        `SELECT COUNT(*) AS total FROM telegram_checkin_logs l WHERE ${journalFilter}`
+    );
+    const total = parseInt(countRes.rows[0]?.total || '0', 10);
+    const { rows } = await db.query(
+        `SELECT l.id,
+                l.telegram_user_id,
+                l.checkin_date::text AS checkin_date,
+                l.reflection_note,
+                l.body_feeling_note,
+                u.username,
+                u.first_name,
+                u.last_name,
+                ARRAY_AGG(pm.id ORDER BY pm.sort_order ASC, pm.id ASC)
+                    FILTER (WHERE pm.id IS NOT NULL) AS method_ids,
+                ARRAY_AGG(pm.name_zh ORDER BY pm.sort_order ASC, pm.id ASC)
+                    FILTER (WHERE pm.id IS NOT NULL) AS leaf_method_names
+         FROM telegram_checkin_logs l
+         JOIN telegram_users u ON u.telegram_user_id = l.telegram_user_id
+         LEFT JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
+         LEFT JOIN practice_methods pm ON pm.id = s.practice_method_id
+         WHERE ${journalFilter}
+         GROUP BY l.id, u.telegram_user_id, u.username, u.first_name, u.last_name
+         ORDER BY l.checkin_date DESC, l.updated_at DESC, l.id DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+    );
+
+    const entries = rows.map((row): CommunityPracticeJournalEntry => {
+        const methodIds = Array.isArray(row.method_ids)
+            ? row.method_ids.map((methodId: number | string) => Number(methodId)).filter(Number.isFinite)
+            : [];
+        const groupedMethodNames = new Map<number, string>();
+        methodIds.forEach((methodId: number) => {
+            const groupedMethod = taxonomy.parentByLeafId.get(methodId) || taxonomy.rowById.get(methodId);
+            if (groupedMethod) groupedMethodNames.set(groupedMethod.id, groupedMethod.nameZh);
+        });
+        const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
+
+        return {
+            id: Number(row.id),
+            telegramUserId: Number(row.telegram_user_id),
+            displayName: fullName || (row.username ? `@${row.username}` : `User ${row.telegram_user_id}`),
+            date: row.checkin_date,
+            groupedMethods: Array.from(groupedMethodNames.values()),
+            leafMethods: Array.isArray(row.leaf_method_names)
+                ? row.leaf_method_names.filter((name: string | null) => typeof name === 'string')
+                : [],
+            reflectionNote: row.reflection_note || '',
+            bodyFeelingNote: row.body_feeling_note || ''
+        };
+    });
+
+    return { total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)), entries };
+};
+
 export const getCommunityMethodMix = async (periodDays: number): Promise<MethodMixResult> => {
     const totalDaysQuery = `
         SELECT COUNT(*) AS total_checkin_days
         FROM telegram_checkin_logs
-        WHERE checkin_date >= (CURRENT_DATE - ($1::int - 1))
+        WHERE checkin_date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Taipei')::date - ($1::int - 1))
     `;
     const totalDaysRes = await db.query(totalDaysQuery, [periodDays]);
     const totalCheckinDays = parseInt(totalDaysRes.rows[0]?.total_checkin_days || '0', 10);
@@ -225,7 +299,7 @@ export const getUserMethodMix = async (telegramUserId: number, periodDays: numbe
         SELECT COUNT(*) AS total_checkin_days
         FROM telegram_checkin_logs
         WHERE telegram_user_id = $1
-          AND checkin_date >= (CURRENT_DATE - ($2::int - 1))
+          AND checkin_date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Taipei')::date - ($2::int - 1))
     `;
     const totalDaysRes = await db.query(totalDaysQuery, [telegramUserId, periodDays]);
     const totalCheckinDays = parseInt(totalDaysRes.rows[0]?.total_checkin_days || '0', 10);

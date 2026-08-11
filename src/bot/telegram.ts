@@ -46,24 +46,36 @@ const ensureUser = async (ctx: any) => {
 
 const openCheckinWebApp = async (ctx: any) => {
     await ensureUser(ctx);
+    if (ctx.chat?.type !== 'private') {
+        await ctx.reply('請到 Bot 私人聊天室使用 /checkin 開啟打卡表單。');
+        return;
+    }
     const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
     await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
 };
 
 bot.command('start', async (ctx) => {
     await ensureUser(ctx);
+    if (ctx.chat?.type !== 'private') {
+        await ctx.reply('歡迎使用氣功打卡小幫手！請到 Bot 私人聊天室使用 /start 開啟完整功能選單。');
+        return;
+    }
     const keyboard = new InlineKeyboard()
         .webApp('✅ 開始打卡', env.telegramWebappUrl)
+        .webApp('🏆 排行榜', env.telegramLeaderboardWebappUrl)
         .row()
-        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
+        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl)
+        .webApp('📈 功法分析', env.telegramMethodAnalysisWebappUrl);
 
     await ctx.reply(
         [
             '歡迎使用氣功打卡小幫手（Telegram 版）！',
             '',
-            '你可以直接使用下方兩個主要入口：',
+            '你可以直接使用下方四個主要入口：',
             '1. ✅ 打卡',
-            '2. 🏮 成就頁',
+            '2. 🏆 排行榜',
+            '3. 🏮 成就頁',
+            '4. 📈 功法分析',
             '',
             '每天練功、每天記錄，穩穩累積你的功力與成就。'
         ].join('\n'),
@@ -95,13 +107,29 @@ bot.command('badges', async (ctx) => {
 
 bot.command('achievements', async (ctx) => {
     await ensureUser(ctx);
+    if (ctx.chat?.type !== 'private') {
+        await ctx.reply('請到 Bot 私人聊天室使用 /achievements 開啟成就頁。');
+        return;
+    }
     const keyboard = new InlineKeyboard().webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
     await ctx.reply('請點下方按鈕開啟你的成就頁。', { reply_markup: keyboard });
 });
 
 bot.command('leaderboard', async (ctx) => {
     await ensureUser(ctx);
-    await ctx.reply(await buildLeaderboardMessage('all'));
+    const keyboard = new InlineKeyboard().webApp('🏆 開啟排行榜', env.telegramLeaderboardWebappUrl);
+    const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
+    await ctx.reply(await buildLeaderboardMessage('all'), options);
+});
+
+bot.command('methodanalysis', async (ctx) => {
+    await ensureUser(ctx);
+    if (ctx.chat?.type !== 'private') {
+        await ctx.reply('請到 Bot 私人聊天室使用 /methodanalysis 開啟完整功法分析。');
+        return;
+    }
+    const keyboard = new InlineKeyboard().webApp('📈 開啟功法分析', env.telegramMethodAnalysisWebappUrl);
+    await ctx.reply('請點下方按鈕查看你的 30／90 天功法分析與練功點評。', { reply_markup: keyboard });
 });
 
 bot.command('weekly', async (ctx) => {
@@ -129,7 +157,9 @@ bot.command('method30', async (ctx) => {
     if (!ctx.from) return;
     const result = await getUserMethodMix(ctx.from.id, 30);
     const review = await generateMethodReviewWithLlm(result, buildMethodReview(result), ctx.from.id);
-    await ctx.reply(buildMethodMixMessage(result, review));
+    const keyboard = new InlineKeyboard().webApp('📈 開啟完整功法分析', env.telegramMethodAnalysisWebappUrl);
+    const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
+    await ctx.reply(buildMethodMixMessage(result, review), options);
 });
 
 bot.command('method90', async (ctx) => {
@@ -137,7 +167,9 @@ bot.command('method90', async (ctx) => {
     if (!ctx.from) return;
     const result = await getUserMethodMix(ctx.from.id, 90);
     const review = await generateMethodReviewWithLlm(result, buildMethodReview(result), ctx.from.id);
-    await ctx.reply(buildMethodMixMessage(result, review));
+    const keyboard = new InlineKeyboard().webApp('📈 開啟完整功法分析', env.telegramMethodAnalysisWebappUrl);
+    const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
+    await ctx.reply(buildMethodMixMessage(result, review), options);
 });
 
 bot.command('remind', async (ctx) => {
@@ -236,6 +268,7 @@ export const setupBotCommands = async () => {
             { command: 'leaderboard', description: '總排行榜' },
             { command: 'weekly', description: '本週排行榜' },
             { command: 'monthly', description: '本月排行榜' },
+            { command: 'methodanalysis', description: '開啟完整功法分析' },
             { command: 'method30', description: '最近 30 天功法分析' },
             { command: 'method90', description: '最近 90 天功法分析' },
             { command: 'remind', description: '設定每日提醒時間 / 時區 / 開關' },

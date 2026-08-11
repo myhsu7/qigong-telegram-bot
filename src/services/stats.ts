@@ -5,6 +5,9 @@ import { getUserBadges } from './badges';
 const TIMEZONE = 'Asia/Taipei';
 
 export type LeaderboardPeriod = 'week' | 'month' | 'quarter' | 'year' | 'all';
+const LEADERBOARD_CACHE_TTL_MS = 30 * 1000;
+const leaderboardCache = new Map<LeaderboardPeriod, { data: Awaited<ReturnType<typeof loadLeaderboard>>; expiresAt: number }>();
+const leaderboardRequests = new Map<LeaderboardPeriod, Promise<Awaited<ReturnType<typeof loadLeaderboard>>>>();
 
 export interface UserStats {
     totalCheckins: number;
@@ -146,14 +149,20 @@ export const getUserStats = async (telegramUserId: number): Promise<UserStats> =
     };
 };
 
-export const getLeaderboard = async (period: LeaderboardPeriod) => {
+const loadLeaderboard = async (period: LeaderboardPeriod) => {
     const range = getPeriodRange(period);
+    const rangeParams = range
+        ? [
+            moment(range.start).tz(TIMEZONE).format('YYYY-MM-DD'),
+            moment(range.end).tz(TIMEZONE).format('YYYY-MM-DD')
+        ]
+        : [];
 
     const totalsQuery = range
         ? `SELECT u.telegram_user_id, u.username, u.first_name, u.last_name, COUNT(*) AS total_days
            FROM telegram_checkin_logs l
            JOIN telegram_users u ON u.telegram_user_id = l.telegram_user_id
-           WHERE l.created_at >= $1 AND l.created_at < $2
+           WHERE l.checkin_date >= $1::date AND l.checkin_date < $2::date
            GROUP BY u.telegram_user_id, u.username, u.first_name, u.last_name
            ORDER BY total_days DESC, u.first_name ASC
            LIMIT 10`
@@ -165,14 +174,14 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
            LIMIT 10`;
 
     const totalsRows = range
-        ? (await db.query(totalsQuery, [range.start, range.end])).rows
+        ? (await db.query(totalsQuery, rangeParams)).rows
         : (await db.query(totalsQuery)).rows;
 
     const streaksQuery = range
         ? `SELECT l.telegram_user_id, u.username, u.first_name, u.last_name, l.checkin_date
            FROM telegram_checkin_logs l
            JOIN telegram_users u ON u.telegram_user_id = l.telegram_user_id
-           WHERE l.created_at >= $1 AND l.created_at < $2
+           WHERE l.checkin_date >= $1::date AND l.checkin_date < $2::date
            ORDER BY l.telegram_user_id ASC, l.checkin_date ASC`
         : `SELECT l.telegram_user_id, u.username, u.first_name, u.last_name, l.checkin_date
            FROM telegram_checkin_logs l
@@ -180,7 +189,7 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
            ORDER BY l.telegram_user_id ASC, l.checkin_date ASC`;
 
     const streakRows = range
-        ? (await db.query(streaksQuery, [range.start, range.end])).rows
+        ? (await db.query(streaksQuery, rangeParams)).rows
         : (await db.query(streaksQuery)).rows;
 
     const userStreaks = new Map<number, { telegramUserId: number; displayName: string; maxStreak: number }>();
@@ -197,9 +206,10 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
     };
 
     for (const row of streakRows) {
-        if (row.telegram_user_id !== currentUserId) {
+        const rowUserId = Number(row.telegram_user_id);
+        if (rowUserId !== currentUserId) {
             flush();
-            currentUserId = row.telegram_user_id;
+            currentUserId = rowUserId;
             currentDisplayName = getDisplayName(row);
             currentStreak = 1;
             maxStreak = 1;
@@ -232,6 +242,24 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
         .slice(0, 10);
 
     return { totals, streaks };
+};
+
+export const getLeaderboard = async (period: LeaderboardPeriod) => {
+    const cached = leaderboardCache.get(period);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    if (cached) leaderboardCache.delete(period);
+
+    const existingRequest = leaderboardRequests.get(period);
+    if (existingRequest) return existingRequest;
+
+    const request = loadLeaderboard(period)
+        .then((data) => {
+            leaderboardCache.set(period, { data, expiresAt: Date.now() + LEADERBOARD_CACHE_TTL_MS });
+            return data;
+        })
+        .finally(() => leaderboardRequests.delete(period));
+    leaderboardRequests.set(period, request);
+    return request;
 };
 
 export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>, anchorDate?: string) => {

@@ -5,8 +5,8 @@ Telegram version of the Qigong check-in companion bot.
 ## MVP scope
 
 - Telegram bot webhook receiver
-- `/start`, `/checkin`, `/mystats`, `/badges`, `/achievements`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/method30`, `/method90`, `/remindtest`
-- Telegram Web App check-in entry point
+- `/start`, `/checkin`, `/mystats`, `/badges`, `/achievements`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/methodanalysis`, `/method30`, `/method90`, `/remindtest`
+- Telegram Web Apps for check-in, achievements/history, leaderboard, and method analysis
 - Web App form for:
   - multi-select practice methods
   - reflection note
@@ -20,7 +20,10 @@ Telegram version of the Qigong check-in companion bot.
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_WEBHOOK_SECRET`
    - `PUBLIC_BASE_URL`
-   - `TELEGRAM_WEBAPP_URL`
+    - `TELEGRAM_WEBAPP_URL`
+    - `TELEGRAM_ACHIEVEMENTS_WEBAPP_URL`
+    - `TELEGRAM_LEADERBOARD_WEBAPP_URL`
+    - `TELEGRAM_METHOD_ANALYSIS_WEBAPP_URL`
    - `DATABASE_URL`
 3. Install deps:
    - `npm install`
@@ -39,6 +42,10 @@ psql "$DATABASE_URL" -f migrations/002_badges.sql
 psql "$DATABASE_URL" -f migrations/003_update_practice_methods.sql
 psql "$DATABASE_URL" -f migrations/004_hierarchical_practice_methods.sql
 psql "$DATABASE_URL" -f migrations/005_combo_badges.sql
+psql "$DATABASE_URL" -f migrations/006_user_reminder_settings.sql
+psql "$DATABASE_URL" -f migrations/007_method_day_badges.sql
+psql "$DATABASE_URL" -f migrations/008_fix_sanfu_badge_description.sql
+psql "$DATABASE_URL" -f migrations/009_add_songjing_method.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -57,6 +64,10 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/003_update_practice_methods.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/004_hierarchical_practice_methods.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/005_combo_badges.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/006_user_reminder_settings.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/007_method_day_badges.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/008_fix_sanfu_badge_description.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
 ```
 
 If you are reusing the same PostgreSQL container as the LINE bot, make sure your `.env` points to the Telegram database:
@@ -85,8 +96,11 @@ This creates:
 PUBLIC_BASE_URL=https://your-domain.example.com
 TELEGRAM_WEBAPP_URL=https://your-domain.example.com/telegram/webapp/checkin
 TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-domain.example.com/telegram/webapp/achievements
+TELEGRAM_LEADERBOARD_WEBAPP_URL=https://your-domain.example.com/telegram/webapp/leaderboard
+TELEGRAM_METHOD_ANALYSIS_WEBAPP_URL=https://your-domain.example.com/telegram/webapp/method-analysis
 TELEGRAM_WEBHOOK_SECRET=your_random_secret
 DATABASE_URL=postgres://user:password@host:5432/qigong_telegram_bot
+TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS=3600
 TELEGRAM_REMINDER_ENABLED=true
 TELEGRAM_REMINDER_HOUR=20
 ```
@@ -145,6 +159,8 @@ In that setup, Telegram must use the namespaced routes already built into this r
 PUBLIC_BASE_URL=https://ubuntu1.tailbf9b8d.ts.net
 TELEGRAM_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/checkin
 TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/achievements
+TELEGRAM_LEADERBOARD_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/leaderboard
+TELEGRAM_METHOD_ANALYSIS_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/method-analysis
 ```
 
 Use the resulting public HTTPS URL as `PUBLIC_BASE_URL`, for example:
@@ -190,11 +206,12 @@ checkin - 開啟今日打卡表單
 mystats - 查看個人打卡統計
 badges - 查看個人成就勳章
 achievements - 開啟成就頁
-leaderboard - 查看總排行榜
+leaderboard - 查看總排行榜並開啟排行榜頁
 weekly - 查看週排行榜
 monthly - 查看月排行榜
 quarterly - 查看季排行榜
 yearly - 查看年排行榜
+methodanalysis - 開啟完整功法分析頁
 method30 - 查看最近 30 天功法分析
 method90 - 查看最近 90 天功法分析
 remindtest - 手動補發提醒（測試用）
@@ -208,6 +225,8 @@ remindtest - 手動補發提醒（測試用）
 
 - `GET /telegram/webapp/checkin`
 - `GET /telegram/webapp/achievements`
+- `GET /telegram/webapp/leaderboard`
+- `GET /telegram/webapp/method-analysis`
 
 ## Web App API routes
 
@@ -215,6 +234,8 @@ remindtest - 手動補發提醒（測試用）
 - `GET /telegram/api/webapp/checkin/today`
 - `POST /telegram/api/webapp/checkin`
 - `GET /telegram/api/webapp/achievements`
+- `GET /telegram/api/webapp/leaderboard?period=week|month|quarter|year|all`
+- `GET /telegram/api/webapp/method-analysis`
 
 ## Admin Dashboard (read-only)
 

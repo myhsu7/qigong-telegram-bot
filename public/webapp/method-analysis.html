@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的功法分析</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{color-scheme:light dark}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:var(--tg-theme-secondary-bg-color,#f3f0ea);color:var(--tg-theme-text-color,#24231f)}
+    .container{max-width:760px;margin:0 auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom))}
+    .hero{background:linear-gradient(145deg,#18392b,#2f6b4f);color:#f6f1e7;border-radius:24px;padding:24px;box-shadow:0 18px 45px rgba(24,57,43,.25)}
+    h1{font-size:27px;margin:0 0 7px}h2{font-size:19px;margin:0 0 14px}.subtitle{opacity:.78;font-size:14px}
+    .tabs{display:grid;grid-template-columns:1fr 1fr;background:rgba(47,107,79,.12);border-radius:15px;padding:4px;margin-top:16px}
+    button{border:0;border-radius:12px;padding:11px;font-weight:700;background:transparent;color:var(--tg-theme-hint-color,#64748b)}
+    button.active{background:var(--tg-theme-bg-color,#fff);color:#256148;box-shadow:0 4px 12px rgba(15,23,42,.1)}
+    .card{background:var(--tg-theme-bg-color,#fff);border-radius:20px;padding:19px;margin-top:15px;box-shadow:0 10px 30px rgba(51,46,38,.08)}
+    .overview{display:grid;grid-template-columns:190px 1fr;gap:20px;align-items:center}
+    .donut{width:180px;height:180px;border-radius:50%;display:grid;place-items:center;background:#e5e7eb;position:relative;margin:auto}
+    .donut::after{content:"";position:absolute;inset:28px;border-radius:50%;background:var(--tg-theme-bg-color,#fff)}
+    .donut-center{position:relative;z-index:1;text-align:center}.donut-value{font-size:30px;font-weight:800;color:#256148}.donut-label{font-size:12px;color:var(--tg-theme-hint-color,#64748b)}
+    .legend{display:flex;flex-direction:column;gap:10px}.legend-row{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center}.dot{width:10px;height:10px;border-radius:50%}.legend-name{font-weight:650}.legend-value{color:var(--tg-theme-hint-color,#64748b);font-size:13px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:16px}.stat{background:var(--tg-theme-secondary-bg-color,#f8fafc);border-radius:14px;padding:12px}.stat-label{font-size:11px;color:var(--tg-theme-hint-color,#64748b)}.stat-value{font-size:20px;font-weight:800;margin-top:5px}
+    .review{line-height:1.7;background:linear-gradient(135deg,rgba(47,107,79,.12),rgba(180,143,69,.12));border-left:4px solid #2f6b4f}
+    .method-list{display:flex;flex-direction:column;gap:12px}.method-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}.method-name{font-weight:700}.method-meta{font-size:13px;color:var(--tg-theme-hint-color,#64748b)}.bar{height:8px;border-radius:999px;background:var(--tg-theme-secondary-bg-color,#e5e7eb);overflow:hidden}.bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#2f6b4f,#b48f45)}
+    .journal-list{display:flex;flex-direction:column;gap:11px}.journal{border:1px solid rgba(148,163,184,.2);border-radius:15px;padding:14px}.journal-date{font-weight:750}.tags{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0}.tag{border-radius:999px;padding:5px 9px;background:rgba(47,107,79,.1);color:#256148;font-size:12px}.note{margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}.note-label{font-size:11px;font-weight:800;color:var(--tg-theme-hint-color,#64748b);text-transform:uppercase}
+    .state{text-align:center;padding:32px 10px;color:var(--tg-theme-hint-color,#64748b)}.error{color:#b91c1c}
+    @media(max-width:620px){.overview{grid-template-columns:1fr}.donut{width:165px;height:165px}.stats{grid-template-columns:1fr}.container{padding-left:13px;padding-right:13px}}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="hero">
+      <h1>🧘 我的功法分析</h1>
+      <div class="subtitle">看見練功節奏，找到穩定精進的方向。</div>
+    </section>
+    <div class="tabs">
+      <button data-period="30" class="active">近 30 天</button>
+      <button data-period="90">近 90 天</button>
+    </div>
+    <div id="content"><div class="card state">正在整理你的功法資料...</div></div>
+  </main>
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+    const initData = tg?.initData || '';
+    const colors = ['#2f6b4f','#b48f45','#6366f1','#db6b45','#7c3aed','#0891b2','#be185d','#65a30d'];
+    let currentPeriod = 30;
+    let data = null;
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    const renderDonutGradient = (methods) => {
+      let cursor = 0;
+      const parts = methods.map((method, index) => {
+        const start = cursor;
+        cursor += Math.max(0, Number(method.compositionRatio || 0)) * 360;
+        return `${colors[index % colors.length]} ${start.toFixed(1)}deg ${cursor.toFixed(1)}deg`;
+      });
+      return parts.length ? `conic-gradient(${parts.join(',')})` : '#e5e7eb';
+    };
+
+    const renderJournal = (entries) => {
+      if (!entries?.length) return '<div class="state">最近還沒有心得或身體感受。</div>';
+      return `<div class="journal-list">${entries.map((entry) => {
+        const tags = (entry.groupedMethods || []).map((name) => `<span class="tag">${escapeHtml(name)}</span>`).join('');
+        const reflection = entry.reflectionNote ? `<div class="note"><div class="note-label">練功心得</div>${escapeHtml(entry.reflectionNote)}</div>` : '';
+        const feeling = entry.bodyFeelingNote ? `<div class="note"><div class="note-label">身體感受</div>${escapeHtml(entry.bodyFeelingNote)}</div>` : '';
+        return `<article class="journal"><div class="journal-date">${escapeHtml(entry.date)}</div><div class="tags">${tags}</div>${reflection}${feeling}</article>`;
+      }).join('')}</div>`;
+    };
+
+    const render = () => {
+      if (!data) return;
+      const analysis = currentPeriod === 30 ? data.analysis30 : data.analysis90;
+      const methods = analysis.groupMethods || analysis.methods || [];
+      const legend = methods.slice(0, 8).map((method, index) => `<div class="legend-row"><span class="dot" style="background:${colors[index % colors.length]}"></span><span class="legend-name">${escapeHtml(method.methodName)}</span><span class="legend-value">${(Number(method.compositionRatio || 0) * 100).toFixed(1)}%</span></div>`).join('');
+      const methodList = methods.map((method) => `<div><div class="method-head"><span class="method-name">${escapeHtml(method.methodName)}</span><span class="method-meta">${Number(method.matchedDays)} 天 · ${(Number(method.compositionRatio || 0) * 100).toFixed(1)}%</span></div><div class="bar"><div class="bar-fill" style="width:${Math.min(100, Number(method.compositionRatio || 0) * 100).toFixed(1)}%"></div></div></div>`).join('');
+      document.getElementById('content').innerHTML = `
+        <section class="card">
+          <div class="overview">
+            <div class="donut" style="background:${renderDonutGradient(methods)}"><div class="donut-center"><div class="donut-value">${Number(analysis.totalCheckinDays)}</div><div class="donut-label">打卡天數</div></div></div>
+            <div class="legend">${legend || '<div class="state">這個期間尚無功法資料</div>'}</div>
+          </div>
+          <div class="stats"><div class="stat"><div class="stat-label">總打卡天數</div><div class="stat-value">${Number(analysis.totalCheckinDays)}</div></div><div class="stat"><div class="stat-label">主功法命中</div><div class="stat-value">${Number(analysis.totalMatchedGroupDays || 0)}</div></div><div class="stat"><div class="stat-label">練習功法數</div><div class="stat-value">${methods.length}</div></div></div>
+        </section>
+        <section class="card review"><h2>💡 練功點評</h2><div>${escapeHtml((currentPeriod === 30 ? data.reviewText30 : data.reviewText90) || data.reviewText || '目前沒有可顯示的點評。')}</div></section>
+        <section class="card"><h2>功法配比</h2><div class="method-list">${methodList || '<div class="state">這個期間尚無功法資料</div>'}</div></section>
+        <section class="card"><h2>📜 最近心得與身體感受</h2>${renderJournal(data.journal)}</section>`;
+    };
+
+    const load = async () => {
+      if (!initData) {
+        document.getElementById('content').innerHTML = '<div class="card state error">請從 Telegram App 內開啟功法分析。</div>';
+        return;
+      }
+      try {
+        const response = await fetch('/telegram/api/webapp/method-analysis', { headers: { 'x-telegram-init-data': initData } });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || '功法分析載入失敗');
+        }
+        data = await response.json();
+        render();
+      } catch (error) {
+        document.getElementById('content').innerHTML = `<div class="card state error">${escapeHtml(error.message || '功法分析載入失敗')}</div>`;
+      }
+    };
+
+    document.querySelectorAll('[data-period]').forEach((button) => button.onclick = () => {
+      currentPeriod = Number(button.dataset.period);
+      document.querySelectorAll('[data-period]').forEach((item) => item.classList.toggle('active', item === button));
+      render();
+    });
+    load();
+  </script>
+</body>
+</html>

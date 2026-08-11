@@ -76,8 +76,11 @@ TELEGRAM_WEBHOOK_SECRET=...
 PUBLIC_BASE_URL=https://ubuntu1.tailbf9b8d.ts.net
 TELEGRAM_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/checkin
 TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/achievements
+TELEGRAM_LEADERBOARD_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/leaderboard
+TELEGRAM_METHOD_ANALYSIS_WEBAPP_URL=https://ubuntu1.tailbf9b8d.ts.net/telegram/webapp/method-analysis
 DATABASE_URL=postgres://qigong_user:qigong_password@localhost:5432/qigong_telegram_bot
 TELEGRAM_WEBAPP_AUTH_DISABLED=false
+TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS=3600
 TELEGRAM_REMINDER_ENABLED=true
 TELEGRAM_REMINDER_HOUR=20
 ADMIN_DASH_USER=admin
@@ -96,6 +99,13 @@ docker exec -it qigong_db psql -U qigong_user -d postgres -c "CREATE DATABASE qi
 ```bash
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/001_init.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/002_badges.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/003_update_practice_methods.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/004_hierarchical_practice_methods.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/005_combo_badges.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/006_user_reminder_settings.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/007_method_day_badges.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/008_fix_sanfu_badge_description.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
 ```
 
 ### 5. build 與啟動

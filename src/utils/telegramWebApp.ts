@@ -41,21 +41,34 @@ export const verifyTelegramWebAppInitData = (initData: string): TelegramWebAppAu
 
     if (env.telegramWebappAuthDisabled) {
         const parsed = parseInitData(initData);
-        if (!parsed.user) {
+        if (!parsed.user || !Number.isSafeInteger(parsed.user.id) || parsed.user.id <= 0) {
             throw new Error('Missing Telegram user in initData');
         }
         return { user: parsed.user, authDate: parsed.authDate };
     }
 
     const parsed = parseInitData(initData);
-    if (!parsed.user) {
+    if (!parsed.user || !Number.isSafeInteger(parsed.user.id) || parsed.user.id <= 0) {
         throw new Error('Missing Telegram user in initData');
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    if (!Number.isFinite(parsed.authDate) || !parsed.authDate) {
+        throw new Error('Missing Telegram auth_date');
+    }
+    if (parsed.authDate > now + 60 || now - parsed.authDate > env.telegramWebappAuthMaxAgeSeconds) {
+        throw new Error('Expired Telegram initData');
     }
 
     const secretKey = crypto.createHmac('sha256', 'WebAppData').update(env.telegramBotToken).digest();
     const computedHash = crypto.createHmac('sha256', secretKey).update(parsed.dataCheckString).digest('hex');
 
-    if (computedHash !== parsed.hash) {
+    if (!/^[a-f0-9]{64}$/i.test(parsed.hash)) {
+        throw new Error('Invalid Telegram Web App signature');
+    }
+    const expectedHash = Buffer.from(computedHash, 'hex');
+    const receivedHash = Buffer.from(parsed.hash, 'hex');
+    if (expectedHash.length !== receivedHash.length || !crypto.timingSafeEqual(expectedHash, receivedHash)) {
         throw new Error('Invalid Telegram Web App signature');
     }
 

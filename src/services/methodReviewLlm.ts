@@ -2,6 +2,17 @@ import { env } from '../config/env';
 import { db } from '../db';
 import { MethodMixResult } from './methodAnalysis';
 
+const REVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
+const reviewCache = new Map<string, { review: string; expiresAt: number }>();
+const pendingReviews = new Map<string, Promise<string>>();
+
+const buildCacheKey = (telegramUserId: number, analysis: MethodMixResult) => {
+    const methods = (analysis.groupMethods.length > 0 ? analysis.groupMethods : analysis.leafMethods)
+        .map((method) => `${method.methodCode}:${method.matchedDays}:${method.compositionRatio.toFixed(6)}`)
+        .join('|');
+    return `${telegramUserId}:${analysis.periodDays}:${analysis.totalCheckinDays}:${analysis.totalMatchedMethodDays}:${methods}`;
+};
+
 const trimTo200Chars = (text: string) => {
     const trimmed = text.trim();
     return trimmed.length <= 200 ? trimmed : `${trimmed.slice(0, 197).trimEnd()}...`;
@@ -40,16 +51,13 @@ const buildPrompt = (analysis: MethodMixResult) => {
     };
 };
 
-export const generateMethodReviewWithLlm = async (
+const generateReview = async (
     analysis: MethodMixResult,
     fallbackText: string,
-    telegramUserId: number
+    telegramUserId: number,
+    cacheKey: string,
+    primaryMethods: MethodMixResult['groupMethods']
 ) => {
-    const primaryMethods = analysis.groupMethods.length > 0 ? analysis.groupMethods : analysis.leafMethods;
-    if (!env.localLlmEnabled || !env.localLlmBaseUrl || !env.localLlmModel || primaryMethods.length === 0) {
-        return fallbackText;
-    }
-
     if (env.localLlmCriteria > 0) {
         try {
             const { rows } = await db.query(
@@ -97,11 +105,44 @@ export const generateMethodReviewWithLlm = async (
         if (!content) throw new Error('LLM returned empty content');
 
         console.log(`[method-review-llm] userSuffix=${String(telegramUserId).slice(-6)} model=${env.localLlmModel} period=${analysis.periodDays} duration=${Date.now() - startedAt}ms status=success methods=${primaryMethods.length}`);
-        return trimTo200Chars(content);
+        const review = trimTo200Chars(content);
+        if (reviewCache.size >= 1000) {
+            const now = Date.now();
+            reviewCache.forEach((entry, key) => {
+                if (entry.expiresAt <= now) reviewCache.delete(key);
+            });
+            if (reviewCache.size >= 1000) reviewCache.delete(reviewCache.keys().next().value as string);
+        }
+        reviewCache.set(cacheKey, { review, expiresAt: Date.now() + REVIEW_CACHE_TTL_MS });
+        return review;
     } catch (error) {
         console.error(`[method-review-llm] userSuffix=${String(telegramUserId).slice(-6)} model=${env.localLlmModel} period=${analysis.periodDays} duration=${Date.now() - startedAt}ms status=fallback methods=${primaryMethods.length}`, error);
         return fallbackText;
     } finally {
         clearTimeout(timeout);
     }
+};
+
+export const generateMethodReviewWithLlm = async (
+    analysis: MethodMixResult,
+    fallbackText: string,
+    telegramUserId: number
+) => {
+    const primaryMethods = analysis.groupMethods.length > 0 ? analysis.groupMethods : analysis.leafMethods;
+    if (!env.localLlmEnabled || !env.localLlmBaseUrl || !env.localLlmModel || primaryMethods.length === 0) {
+        return fallbackText;
+    }
+
+    const cacheKey = buildCacheKey(telegramUserId, analysis);
+    const cached = reviewCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.review;
+    if (cached) reviewCache.delete(cacheKey);
+
+    const pending = pendingReviews.get(cacheKey);
+    if (pending) return pending;
+
+    const request = generateReview(analysis, fallbackText, telegramUserId, cacheKey, primaryMethods)
+        .finally(() => pendingReviews.delete(cacheKey));
+    pendingReviews.set(cacheKey, request);
+    return request;
 };

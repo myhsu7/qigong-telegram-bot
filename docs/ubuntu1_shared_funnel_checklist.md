@@ -83,6 +83,9 @@ TELEGRAM_WEBAPP_AUTH_DISABLED=false
 TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS=3600
 TELEGRAM_REMINDER_ENABLED=true
 TELEGRAM_REMINDER_HOUR=20
+TELEGRAM_GROUP_OPS_ENABLED=false
+TELEGRAM_GROUP_REMINDER_HOUR=20
+TELEGRAM_ADMIN_USER_IDS=your_numeric_telegram_user_id
 ADMIN_DASH_USER=admin
 ADMIN_DASH_PASS=your_strong_password
 ADMIN_ALLOWED_IP_PREFIX=100.
@@ -106,6 +109,7 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/007_method_day_badges.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/008_fix_sanfu_badge_description.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
 ```
 
 ### 5. build 與啟動
@@ -293,7 +297,8 @@ https://ubuntu1.tailbf9b8d.ts.net/line/webhook
 curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "'"${PUBLIC_BASE_URL}"'/telegram/webhook/'"${TELEGRAM_WEBHOOK_SECRET}"'"
+    "url": "'"${PUBLIC_BASE_URL}"'/telegram/webhook/'"${TELEGRAM_WEBHOOK_SECRET}"'",
+    "allowed_updates": ["message", "callback_query", "my_chat_member"]
   }'
 ```
 

@@ -34,7 +34,15 @@ export const env = {
     telegramWebappAuthDisabled: process.env.TELEGRAM_WEBAPP_AUTH_DISABLED === 'true',
     telegramWebappAuthMaxAgeSeconds: parseBoundedInteger(process.env.TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS, 3600, 60, 86400),
     telegramReminderEnabled: process.env.TELEGRAM_REMINDER_ENABLED === 'true',
-    telegramReminderHour: parseInt(process.env.TELEGRAM_REMINDER_HOUR || '20', 10),
+    telegramReminderHour: parseBoundedInteger(process.env.TELEGRAM_REMINDER_HOUR, 20, 0, 23),
+    telegramGroupOpsEnabled: process.env.TELEGRAM_GROUP_OPS_ENABLED === 'true',
+    telegramGroupReminderHour: parseBoundedInteger(process.env.TELEGRAM_GROUP_REMINDER_HOUR, 20, 0, 23),
+    telegramAdminUserIds: new Set(
+        (process.env.TELEGRAM_ADMIN_USER_IDS || '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => /^\d+$/.test(value))
+    ),
     localLlmEnabled: process.env.LOCAL_LLM_ENABLED === 'true',
     localLlmBaseUrl: (process.env.LOCAL_LLM_BASE_URL || '').replace(/\/$/, ''),
     localLlmApiKey: process.env.LOCAL_LLM_API_KEY || 'dummy',

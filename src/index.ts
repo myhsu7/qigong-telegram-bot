@@ -1,15 +1,18 @@
 import express from 'express';
 import path from 'path';
 import { env } from './config/env';
-import { telegramWebhook, setupBotCommands } from './bot/telegram';
+import { bot, telegramWebhook, setupBotCommands } from './bot/telegram';
 import webappRoutes from './routes/webapp';
 import apiRoutes from './routes/api';
 import { setupReminderCron } from './services/reminders';
 import { requireAdminBasicAuth, requireTailscaleInternal } from './middleware/adminSecurity';
 import adminRoutes from './routes/admin';
 import { setupErrorLogging } from './logger';
+import { configureTelegramApi } from './services/telegramApi';
+import { resumePendingTelegramGroupDispatches, setupTelegramGroupReminderCron } from './services/groupOperations';
 
 setupErrorLogging('qigong-telegram-bot');
+configureTelegramApi(bot.api);
 const app = express();
 
 app.use(express.json());
@@ -33,5 +36,7 @@ app.listen(env.port, () => {
     console.log(`[telegram-bot] webhook path: /telegram/webhook/${env.telegramWebhookSecret}`);
     console.log(`[telegram-bot] webapp path: /telegram/webapp/checkin`);
     setupReminderCron();
+    setupTelegramGroupReminderCron();
+    resumePendingTelegramGroupDispatches().catch((error) => console.error('[telegram-group] failed to resume pending dispatches', error));
     setupBotCommands();
 });

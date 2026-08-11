@@ -46,6 +46,7 @@ psql "$DATABASE_URL" -f migrations/006_user_reminder_settings.sql
 psql "$DATABASE_URL" -f migrations/007_method_day_badges.sql
 psql "$DATABASE_URL" -f migrations/008_fix_sanfu_badge_description.sql
 psql "$DATABASE_URL" -f migrations/009_add_songjing_method.sql
+psql "$DATABASE_URL" -f migrations/010_telegram_group_operations.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -68,6 +69,7 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/007_method_day_badges.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/008_fix_sanfu_badge_description.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
 ```
 
 If you are reusing the same PostgreSQL container as the LINE bot, make sure your `.env` points to the Telegram database:
@@ -103,6 +105,9 @@ DATABASE_URL=postgres://user:password@host:5432/qigong_telegram_bot
 TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS=3600
 TELEGRAM_REMINDER_ENABLED=true
 TELEGRAM_REMINDER_HOUR=20
+TELEGRAM_GROUP_OPS_ENABLED=false
+TELEGRAM_GROUP_REMINDER_HOUR=20
+TELEGRAM_ADMIN_USER_IDS=123456789
 ```
 
 Optional local LLM method reviews use an OpenAI-compatible API. Reviews are used by `/method30`, `/method90`, and the Admin user method analysis; disabled, ineligible, timed-out, or failed requests automatically use the existing rule-based review.
@@ -177,7 +182,8 @@ TELEGRAM_ACHIEVEMENTS_WEBAPP_URL=https://your-node-name.tailscale.net/telegram/w
 curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "'"${PUBLIC_BASE_URL}"'/telegram/webhook/'"${TELEGRAM_WEBHOOK_SECRET}"'"
+    "url": "'"${PUBLIC_BASE_URL}"'/telegram/webhook/'"${TELEGRAM_WEBHOOK_SECRET}"'",
+    "allowed_updates": ["message", "callback_query", "my_chat_member"]
   }'
 ```
 
@@ -191,6 +197,34 @@ curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
    - bot description
    - command list
    - menu button / Web App entry if desired
+
+## Telegram group operations
+
+Group membership is tracked from `my_chat_member` webhook updates. Existing groups that do not emit a new membership update can be registered manually by an authorized admin inside the group:
+
+```text
+/admin register_group
+```
+
+Configure one or more numeric Telegram user IDs as a comma-separated allowlist. Outbound group reminders and broadcasts remain fail-closed until explicitly enabled:
+
+```ini
+TELEGRAM_ADMIN_USER_IDS=123456789,987654321
+TELEGRAM_GROUP_OPS_ENABLED=true
+TELEGRAM_GROUP_REMINDER_HOUR=20
+```
+
+Hidden admin commands are not added to the public command menu:
+
+```text
+/admin register_group
+/admin create_reminder
+/admin resend_reminder
+/admin list_groups
+/admin broadcast <message>
+```
+
+`create_reminder` only returns a preview. Daily reminders, resend, and broadcast durably enqueue database dispatch/delivery records before acknowledging the command. PostgreSQL locks prevent concurrent workers from processing the same dispatch, and pending deliveries are retried every minute. Delivery is at-least-once: Telegram does not provide a `sendMessage` idempotency key, so a process crash after Telegram accepts a message but before the database marks it sent can still cause a rare duplicate. Group reminder time uses `Asia/Taipei`.
 
 ## Recommended BotFather commands
 

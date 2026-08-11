@@ -1,11 +1,11 @@
 import cron from 'node-cron';
-import { bot } from '../bot/telegram';
 import { db } from '../db';
 import moment from 'moment-timezone';
 import { Lunar } from 'lunar-javascript';
 import { env } from '../config/env';
 import { getDailyWisdom } from '../content/wisdom';
 import { getSolarTermGuide } from '../content/solarTerms';
+import { getTelegramApi } from './telegramApi';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -67,7 +67,7 @@ const sendTelegramReminderMessageWithRetry = async (recipient: ReminderRecipient
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            await bot.api.sendMessage(String(recipient.telegramUserId), text);
+            await getTelegramApi().sendMessage(String(recipient.telegramUserId), text);
             if (attempt > 1) {
                 console.log(`[telegram-reminder] send succeeded after retry user=${recipient.telegramUserId} timezone=${recipient.reminderTimezone} attempt=${attempt}/${maxAttempts}`);
             }

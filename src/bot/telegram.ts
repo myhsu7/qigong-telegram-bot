@@ -7,6 +7,16 @@ import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
 import { getTelegramReminderSettings, sendTelegramReminderPreview, updateTelegramReminderSettings } from '../services/reminders';
 import { buildWebAppCheckinSummary } from '../services/chatSummary';
 import moment from 'moment-timezone';
+import {
+    createTelegramGroupReminderText,
+    deactivateTelegramGroup,
+    enqueueTelegramGroupBroadcast,
+    enqueueTelegramGroupReminderResend,
+    listTelegramGroups,
+    migrateTelegramGroup,
+    processTelegramGroupDispatch,
+    registerTelegramGroup,
+} from '../services/groupOperations';
 
 export const bot = new Bot(env.telegramBotToken);
 
@@ -170,6 +180,148 @@ bot.command('method90', async (ctx) => {
     const keyboard = new InlineKeyboard().webApp('📈 開啟完整功法分析', env.telegramMethodAnalysisWebappUrl);
     const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
     await ctx.reply(buildMethodMixMessage(result, review), options);
+});
+
+bot.on('my_chat_member', async (ctx) => {
+    const membership = ctx.myChatMember;
+    const chat = membership.chat;
+    if (chat.type !== 'group' && chat.type !== 'supergroup') return;
+    const member = membership.new_chat_member as unknown as { status: string; is_member?: boolean };
+    const oldMember = membership.old_chat_member as unknown as { status: string; is_member?: boolean };
+    const isActive = member.status === 'member'
+        || member.status === 'administrator'
+        || member.status === 'creator'
+        || (member.status === 'restricted' && member.is_member === true);
+    const wasActive = oldMember.status === 'member'
+        || oldMember.status === 'administrator'
+        || oldMember.status === 'creator'
+        || (oldMember.status === 'restricted' && oldMember.is_member === true);
+
+    if (isActive) {
+        await registerTelegramGroup({
+            id: chat.id,
+            type: chat.type,
+            title: chat.title,
+            username: 'username' in chat ? chat.username : undefined
+        });
+        if (!wasActive) {
+            await ctx.reply('大家好！我已登記這個群組。每日打卡請私訊 Bot，輸入 /checkin 開始。');
+        }
+        return;
+    }
+    await deactivateTelegramGroup(chat.id, `Membership changed to ${member.status}`);
+});
+
+bot.on('message:migrate_to_chat_id', async (ctx) => {
+    await migrateTelegramGroup(ctx.chat.id, ctx.message.migrate_to_chat_id);
+});
+
+bot.command('admin', async (ctx) => {
+    const senderId = ctx.from?.id;
+    if (!senderId || !env.telegramAdminUserIds.has(String(senderId))) return;
+    const input = typeof ctx.match === 'string' ? ctx.match.trim() : '';
+    const [rawAction = '', ...rest] = input.split(/\s+/);
+    const action = rawAction.toLowerCase().replace(/-/g, '_');
+
+    if (action === 'register_group') {
+        if (ctx.chat?.type !== 'group' && ctx.chat?.type !== 'supergroup') {
+            await ctx.reply('系統訊息：register_group 必須在目標群組內執行。');
+            return;
+        }
+        await registerTelegramGroup({
+            id: ctx.chat.id,
+            type: ctx.chat.type,
+            title: ctx.chat.title,
+            username: 'username' in ctx.chat ? ctx.chat.username : undefined
+        });
+        await ctx.reply('系統訊息：此群組已成功登記至提醒名單。');
+        return;
+    }
+
+    if (ctx.chat?.type !== 'private') {
+        await ctx.reply('系統訊息：此管理指令只能在 Bot 私人聊天室執行。');
+        return;
+    }
+
+    if (action === 'create_reminder') {
+        await ctx.reply(await createTelegramGroupReminderText());
+        return;
+    }
+
+    if (action === 'list_groups') {
+        const groups = await listTelegramGroups();
+        if (groups.length === 0) {
+            await ctx.reply('系統訊息：目前沒有已登記的有效群組。');
+            return;
+        }
+        const lines = groups.map((group, index) => `${index + 1}. ${group.title}\n   ${group.chatType} · ${group.chatId}`);
+        const chunks: string[] = [];
+        let chunk = `系統訊息：目前共有 ${groups.length} 個群組\n\n`;
+        for (const line of lines) {
+            if ((chunk + line).length > 3500) {
+                chunks.push(chunk.trim());
+                chunk = '';
+            }
+            chunk += `${line}\n`;
+        }
+        if (chunk.trim()) chunks.push(chunk.trim());
+        for (const text of chunks) await ctx.reply(text);
+        return;
+    }
+
+    if (action === 'resend_reminder') {
+        if (!env.telegramGroupOpsEnabled) {
+            await ctx.reply('系統訊息：TELEGRAM_GROUP_OPS_ENABLED 尚未開啟。');
+            return;
+        }
+        const dispatchId = await enqueueTelegramGroupReminderResend(ctx.update.update_id, senderId);
+        await ctx.reply('系統訊息：群組提醒已排入發送佇列，完成後會回報結果。');
+        void processTelegramGroupDispatch(dispatchId)
+            .then((result) => ctx.api.sendMessage(senderId, result.skipped
+                ? '系統訊息：此群組提醒正由另一個程序處理。'
+                : `系統訊息：群組提醒處理完成，成功 ${result.success}/${result.total}，永久失敗 ${result.failed}，待重試 ${result.pending}。`))
+            .catch((error) => {
+                console.error('[telegram-admin] resend reminder failed', error);
+                return ctx.api.sendMessage(senderId, '系統訊息：群組提醒補發失敗，請查看 error log。');
+            });
+        return;
+    }
+
+    if (action === 'broadcast') {
+        const message = input.slice(rawAction.length).trim();
+        if (!message) {
+            await ctx.reply('系統訊息：請使用 /admin broadcast <訊息內容>');
+            return;
+        }
+        if (message.length > 4096) {
+            await ctx.reply('系統訊息：廣播內容不可超過 4096 字。');
+            return;
+        }
+        if (!env.telegramGroupOpsEnabled) {
+            await ctx.reply('系統訊息：TELEGRAM_GROUP_OPS_ENABLED 尚未開啟。');
+            return;
+        }
+        const dispatchId = await enqueueTelegramGroupBroadcast(ctx.update.update_id, message, senderId);
+        await ctx.reply('系統訊息：群組廣播已排入發送佇列，完成後會回報結果。');
+        void processTelegramGroupDispatch(dispatchId)
+            .then((result) => ctx.api.sendMessage(senderId, result.skipped
+                ? '系統訊息：此群組廣播正由另一個程序處理。'
+                : `系統訊息：群組廣播處理完成，成功 ${result.success}/${result.total}，永久失敗 ${result.failed}，待重試 ${result.pending}。`))
+            .catch((error) => {
+                console.error('[telegram-admin] broadcast failed', error);
+                return ctx.api.sendMessage(senderId, '系統訊息：群組廣播失敗，請查看 error log。');
+            });
+        return;
+    }
+
+    await ctx.reply([
+        '系統訊息：可用管理指令',
+        '/admin register_group',
+        '/admin create_reminder',
+        '/admin resend_reminder',
+        '/admin list_groups',
+        '/admin broadcast <訊息>'
+    ].join('\n'));
 });
 
 bot.command('remind', async (ctx) => {

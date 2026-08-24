@@ -110,6 +110,7 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/008_fix_sanfu_badge_description.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/011_backfill_2026_sanfu_badge.sql
 ```
 
 ### 5. build 與啟動

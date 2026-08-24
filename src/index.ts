@@ -10,6 +10,7 @@ import adminRoutes from './routes/admin';
 import { setupErrorLogging } from './logger';
 import { configureTelegramApi } from './services/telegramApi';
 import { resumePendingTelegramGroupDispatches, setupTelegramGroupReminderCron } from './services/groupOperations';
+import { setupSanFuBadgeReconciliation } from './services/sanfuBadges';
 
 setupErrorLogging('qigong-telegram-bot');
 configureTelegramApi(bot.api);
@@ -37,6 +38,7 @@ app.listen(env.port, () => {
     console.log(`[telegram-bot] webapp path: /telegram/webapp/checkin`);
     setupReminderCron();
     setupTelegramGroupReminderCron();
+    setupSanFuBadgeReconciliation();
     resumePendingTelegramGroupDispatches().catch((error) => console.error('[telegram-group] failed to resume pending dispatches', error));
     setupBotCommands();
 });

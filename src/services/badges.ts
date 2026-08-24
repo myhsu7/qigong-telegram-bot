@@ -206,7 +206,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
 
     // Seasonal summer
     const sanFuPeriod = getSanFuPeriod(currentYear);
-    if (sanFuPeriod && now.isSame(sanFuPeriod.end, 'day')) {
+    if (sanFuPeriod && now.isSameOrAfter(sanFuPeriod.end, 'day')) {
         const { rows } = await db.query(
             `SELECT COUNT(*) AS count
              FROM telegram_checkin_logs

@@ -47,6 +47,7 @@ psql "$DATABASE_URL" -f migrations/007_method_day_badges.sql
 psql "$DATABASE_URL" -f migrations/008_fix_sanfu_badge_description.sql
 psql "$DATABASE_URL" -f migrations/009_add_songjing_method.sql
 psql "$DATABASE_URL" -f migrations/010_telegram_group_operations.sql
+psql "$DATABASE_URL" -f migrations/011_backfill_2026_sanfu_badge.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -70,7 +71,10 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/008_fix_sanfu_badge_description.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/011_backfill_2026_sanfu_badge.sql
 ```
+
+Migration 011 idempotently awards the 2026 `夏練三伏` badge to users who checked in on all 40 days from July 15 through August 23. The service also reconciles the latest completed Sanfu period at startup and daily at 00:10 Asia/Taipei.
 
 If you are reusing the same PostgreSQL container as the LINE bot, make sure your `.env` points to the Telegram database:
 

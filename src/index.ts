@@ -11,8 +11,11 @@ import { setupErrorLogging } from './logger';
 import { configureTelegramApi } from './services/telegramApi';
 import { resumePendingTelegramGroupDispatches, setupTelegramGroupReminderCron } from './services/groupOperations';
 import { setupSanFuBadgeReconciliation } from './services/sanfuBadges';
+import { configureNodeNetwork } from './network';
 
 setupErrorLogging('qigong-telegram-bot');
+const networkConfig = configureNodeNetwork();
+console.log(`[network] auto-select family attempt timeout ${networkConfig.timeoutMs}ms (previous ${networkConfig.previousTimeoutMs}ms)`);
 configureTelegramApi(bot.api);
 const app = express();
 

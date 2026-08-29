@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
+import type { RequestHandler } from 'express';
 import { env } from '../config/env';
 import { upsertTelegramUser } from '../services/checkin';
 import { buildBadgesMessage, buildEnhancedUserStatsMessage, buildLeaderboardMessage, getUserStats } from '../services/stats';
@@ -17,6 +18,7 @@ import {
     processTelegramGroupDispatch,
     registerTelegramGroup,
 } from '../services/groupOperations';
+import { serializeError } from '../errorDetails';
 
 export const bot = new Bot(env.telegramBotToken);
 
@@ -407,7 +409,30 @@ bot.on('message:web_app_data', async (ctx) => {
     }
 });
 
-export const telegramWebhook = webhookCallback(bot, 'express');
+const grammYWebhook = webhookCallback(bot, 'express');
+
+export const telegramWebhook: RequestHandler = async (req, res, next) => {
+    try {
+        await grammYWebhook(req, res);
+    } catch (error) {
+        const botError = error as {
+            ctx?: {
+                update?: { update_id?: number };
+                chat?: { type?: string };
+                message?: { text?: string };
+            };
+            error?: unknown;
+        };
+        const messageText = botError.ctx?.message?.text;
+        console.error('[telegram-bot] webhook update failed', {
+            updateId: botError.ctx?.update?.update_id,
+            chatType: botError.ctx?.chat?.type,
+            command: messageText?.startsWith('/') ? messageText.split(/\s+/, 1)[0] : undefined,
+            error: serializeError(botError.error ?? error)
+        });
+        next(error);
+    }
+};
 
 export const setupBotCommands = async () => {
     try {

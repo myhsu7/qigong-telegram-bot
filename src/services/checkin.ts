@@ -3,6 +3,7 @@ import { db } from '../db';
 import { TelegramWebAppUser } from '../utils/telegramWebApp';
 import { PracticeMethod, getPracticeMethodRows, buildPracticeMethodTree } from './taxonomy';
 import { normalizeSelectedLeafIds } from './taxonomy';
+import { Locale, methodName, normalizeLocale } from '../i18n';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -16,17 +17,24 @@ export interface TodayCheckinResponse {
 }
 
 export const upsertTelegramUser = async (user: TelegramWebAppUser) => {
-    await db.query(
-        `INSERT INTO telegram_users (telegram_user_id, username, first_name, last_name, language_code)
-         VALUES ($1, $2, $3, $4, $5)
+    const locale = normalizeLocale(user.language_code);
+    const { rows } = await db.query(
+        `INSERT INTO telegram_users (telegram_user_id, username, first_name, last_name, language_code, interface_locale)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (telegram_user_id) DO UPDATE SET
              username = EXCLUDED.username,
              first_name = EXCLUDED.first_name,
              last_name = EXCLUDED.last_name,
              language_code = EXCLUDED.language_code,
-             updated_at = CURRENT_TIMESTAMP`,
-        [user.id, user.username || null, user.first_name || null, user.last_name || null, user.language_code || null]
+             interface_locale = CASE
+                 WHEN telegram_users.language_selected THEN telegram_users.interface_locale
+                 ELSE EXCLUDED.interface_locale
+             END,
+             updated_at = CURRENT_TIMESTAMP
+         RETURNING interface_locale`,
+        [user.id, user.username || null, user.first_name || null, user.last_name || null, user.language_code || null, locale]
     );
+    return normalizeLocale(rows[0]?.interface_locale || locale);
 };
 
 export const getPracticeMethods = async (): Promise<PracticeMethod[]> => {
@@ -88,7 +96,7 @@ const buildLegacyNote = (methodNames: string[], reflectionNote: string, bodyFeel
     return parts.join('；');
 };
 
-export const saveTodayCheckin = async (telegramUserId: number, methodIds: number[], reflectionNote: string, bodyFeelingNote: string) => {
+export const saveTodayCheckin = async (telegramUserId: number, methodIds: number[], reflectionNote: string, bodyFeelingNote: string, locale: Locale = 'zh_TW') => {
     if (methodIds.length === 0) {
         throw new Error('At least one practice method must be selected');
     }
@@ -100,7 +108,7 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         await client.query('BEGIN');
 
         const methodRows = await client.query(
-            `SELECT id, code, name_zh, method_type
+            `SELECT id, code, name_zh, name_zh_cn, name_en, method_type
              FROM practice_methods
              WHERE id = ANY($1::int[]) AND is_active = TRUE
              ORDER BY sort_order ASC, id ASC`,
@@ -115,8 +123,13 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
             throw new Error('Only leaf practice methods can be selected');
         }
 
-        const methodNames = methodRows.rows.map((row) => row.name_zh);
-        const note = buildLegacyNote(methodNames, reflectionNote, bodyFeelingNote);
+        const methodNames = methodRows.rows.map((row) => methodName({
+            nameZh: row.name_zh,
+            nameZhCn: row.name_zh_cn,
+            nameEn: row.name_en
+        }, locale));
+        const legacyMethodNames = methodRows.rows.map((row) => row.name_zh);
+        const note = buildLegacyNote(legacyMethodNames, reflectionNote, bodyFeelingNote);
 
         const existing = await client.query(
             `SELECT id

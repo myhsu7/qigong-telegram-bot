@@ -26,39 +26,71 @@
     .name{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.you{font-size:11px;color:#7c3aed;margin-left:6px}
     .value{font-weight:800;color:var(--tg-theme-button-color,#4338ca)}
     .state{text-align:center;padding:32px 12px;color:var(--tg-theme-hint-color,#64748b)}.error{color:#b91c1c}
+    .language-row{display:flex;justify-content:flex-end;margin-bottom:12px}.language-select{border:1px solid rgba(148,163,184,.45);border-radius:10px;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#172033);padding:8px 10px;font-size:14px}
   </style>
 </head>
 <body>
   <main class="container">
+    <div class="language-row"><select id="languageSelect" class="language-select" aria-label="語言"><option value="zh_TW">繁體中文</option><option value="zh_CN">简体中文</option><option value="en">English</option></select></div>
     <section class="hero">
-      <h1>🏆 精進排行榜</h1>
-      <div class="subtitle">每一天的持續，都在累積看得見的功夫。</div>
+      <h1 data-i18n="heading">🏆 精進排行榜</h1>
+      <div class="subtitle" data-i18n="subtitle">每一天的持續，都在累積看得見的功夫。</div>
     </section>
-    <nav class="periods" aria-label="排行榜期間">
-      <button data-period="week" class="active">本週</button>
-      <button data-period="month">本月</button>
-      <button data-period="quarter">本季</button>
-      <button data-period="year">本年</button>
-      <button data-period="all">總榜</button>
+    <nav class="periods" id="periods" aria-label="排行榜期間">
+      <button data-period="week" class="active" data-i18n="week">本週</button>
+      <button data-period="month" data-i18n="month">本月</button>
+      <button data-period="quarter" data-i18n="quarter">本季</button>
+      <button data-period="year" data-i18n="year">本年</button>
+      <button data-period="all" data-i18n="all">總榜</button>
     </nav>
     <section class="card">
       <div class="switch">
-        <button data-mode="totals" class="active">總打卡天數</button>
-        <button data-mode="streaks">最長連續天數</button>
+        <button data-mode="totals" class="active" data-i18n="totals">總打卡天數</button>
+        <button data-mode="streaks" data-i18n="streaks">最長連續天數</button>
       </div>
-      <div id="list" class="list"><div class="state">正在載入排行榜...</div></div>
+      <div id="list" class="list"></div>
     </section>
   </main>
   <script>
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
     const initData = tg?.initData || '';
+    const translations = {
+      zh_TW:{title:'氣功排行榜',language:'語言',periodLabel:'排行榜期間',heading:'🏆 精進排行榜',subtitle:'每一天的持續，都在累積看得見的功夫。',week:'本週',month:'本月',quarter:'本季',year:'本年',all:'總榜',totals:'總打卡天數',streaks:'最長連續天數',loading:'正在載入排行榜...',empty:'這個期間還沒有打卡資料。',you:'你',days:(n)=>`${n} 天`,authError:'請從 Telegram App 內開啟排行榜。',loadFailed:'排行榜載入失敗'},
+      zh_CN:{title:'气功排行榜',language:'语言',periodLabel:'排行榜期间',heading:'🏆 精进排行榜',subtitle:'每一天的坚持，都在累积看得见的功夫。',week:'本周',month:'本月',quarter:'本季度',year:'本年',all:'总榜',totals:'总打卡天数',streaks:'最长连续天数',loading:'正在加载排行榜...',empty:'这个期间还没有打卡数据。',you:'你',days:(n)=>`${n} 天`,authError:'请从 Telegram App 内打开排行榜。',loadFailed:'排行榜加载失败'},
+      en:{title:'Qigong Leaderboard',language:'Language',periodLabel:'Leaderboard period',heading:'🏆 Practice Leaderboard',subtitle:'Every day of consistency builds visible progress.',week:'This Week',month:'This Month',quarter:'This Quarter',year:'This Year',all:'All Time',totals:'Total Check-in Days',streaks:'Longest Streak',loading:'Loading leaderboard...',empty:'No check-in data for this period.',you:'You',days:(n)=>`${n} ${Number(n) === 1 ? 'day' : 'days'}`,authError:'Please open the leaderboard in the Telegram app.',loadFailed:'Could not load the leaderboard'}
+    };
+    const localeKey = 'qigong_telegram_locale';
+    const mapLocale = (code) => ['zh-hans','zh-cn','zh-sg'].includes(String(code).toLowerCase()) ? 'zh_CN' : (/^en(?:-|$)/i.test(String(code)) ? 'en' : 'zh_TW');
+    const storedLocale = localStorage.getItem(localeKey);
+    let locale = translations[storedLocale] ? storedLocale : mapLocale(tg?.initDataUnsafe?.user?.language_code || '');
+    let t = translations[locale];
     let currentPeriod = 'week';
     let currentMode = 'totals';
     let currentData = null;
     let requestVersion = 0;
+    let profileReady = false;
     const escapeHtml = (value) => String(value || '')
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    const apiFetch = async (url, options = {}, includeLocale = true) => {
+      if (!initData) throw new Error(t.authError);
+      const localizedUrl = `${url}${url.includes('?') ? '&' : '?'}locale=${encodeURIComponent(locale)}`;
+      const headers = new Headers(options.headers || {});
+      headers.set('x-telegram-init-data', initData);
+      if (!headers.has('Content-Type') && options.method && options.method !== 'GET') headers.set('Content-Type', 'application/json');
+      const response = await fetch(includeLocale ? localizedUrl : url, { ...options, headers });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || t.loadFailed);
+      }
+      return response.status === 204 ? null : response.json();
+    };
+
+    const persistProfileLocale = (nextLocale) => apiFetch('/telegram/api/webapp/profile/language', {
+      method: 'PATCH',
+      body: JSON.stringify({ locale: nextLocale })
+    }, false);
 
     const setActiveButtons = () => {
       document.querySelectorAll('[data-period]').forEach((button) => button.classList.toggle('active', button.dataset.period === currentPeriod));
@@ -69,39 +101,35 @@
       const list = document.getElementById('list');
       const rows = currentMode === 'totals' ? (currentData?.totals || []) : (currentData?.streaks || []);
       if (!rows.length) {
-        list.innerHTML = '<div class="state">這個期間還沒有打卡資料。</div>';
+        list.innerHTML = `<div class="state">${t.empty}</div>`;
         return;
       }
       list.innerHTML = rows.map((row) => {
         const value = currentMode === 'totals' ? row.totalDays : row.maxStreak;
         return `<div class="entry ${row.isCurrentUser ? 'me' : ''}">
           <div class="rank">${Number(row.rank)}</div>
-          <div class="name">${escapeHtml(row.displayName)}${row.isCurrentUser ? '<span class="you">你</span>' : ''}</div>
-          <div class="value">${Number(value || 0)} 天</div>
+          <div class="name">${escapeHtml(row.displayName)}${row.isCurrentUser ? `<span class="you">${t.you}</span>` : ''}</div>
+          <div class="value">${t.days(Number(value || 0))}</div>
         </div>`;
       }).join('');
     };
 
     const load = async () => {
+      if (!profileReady && initData) return;
       if (!initData) {
-        document.getElementById('list').innerHTML = '<div class="state error">請從 Telegram App 內開啟排行榜。</div>';
+        document.getElementById('list').innerHTML = `<div class="state error">${t.authError}</div>`;
         return;
       }
       const version = ++requestVersion;
-      document.getElementById('list').innerHTML = '<div class="state">正在載入排行榜...</div>';
+      document.getElementById('list').innerHTML = `<div class="state">${t.loading}</div>`;
       try {
-        const response = await fetch(`/telegram/api/webapp/leaderboard?period=${currentPeriod}`, { headers: { 'x-telegram-init-data': initData } });
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error || '排行榜載入失敗');
-        }
-        const data = await response.json();
+        const data = await apiFetch(`/telegram/api/webapp/leaderboard?period=${currentPeriod}`);
         if (version !== requestVersion) return;
         currentData = data;
         render();
       } catch (error) {
         if (version !== requestVersion) return;
-        document.getElementById('list').innerHTML = `<div class="state error">${escapeHtml(error.message || '排行榜載入失敗')}</div>`;
+        document.getElementById('list').innerHTML = `<div class="state error">${escapeHtml(error.message || t.loadFailed)}</div>`;
       }
     };
 
@@ -115,8 +143,56 @@
       setActiveButtons();
       render();
     });
-    setActiveButtons();
-    load();
+    const languageSelect = document.getElementById('languageSelect');
+    const applyTranslations = () => {
+      t = translations[locale];
+      document.documentElement.lang = locale === 'en' ? 'en' : locale === 'zh_CN' ? 'zh-Hans' : 'zh-Hant';
+      document.title = t.title;
+      document.querySelectorAll('[data-i18n]').forEach((element) => { element.textContent = t[element.dataset.i18n]; });
+      document.getElementById('periods').setAttribute('aria-label', t.periodLabel);
+      languageSelect.value = locale;
+      languageSelect.setAttribute('aria-label', t.language);
+    };
+    languageSelect.addEventListener('change', async () => {
+      const nextLocale = languageSelect.value;
+      languageSelect.disabled = true;
+      try {
+        await persistProfileLocale(nextLocale);
+        locale = nextLocale;
+        localStorage.setItem(localeKey, locale);
+        applyTranslations();
+        currentData = null;
+        await load();
+      } catch (error) {
+        console.error('Failed to persist WebApp locale', error);
+        applyTranslations();
+      } finally {
+        languageSelect.disabled = false;
+      }
+    });
+
+    const initialize = async () => {
+      applyTranslations();
+      setActiveButtons();
+      languageSelect.disabled = true;
+      try {
+        if (initData) {
+          const profile = await apiFetch('/telegram/api/webapp/profile', {}, false);
+          if (translations[profile.locale]) locale = profile.locale;
+          localStorage.setItem(localeKey, locale);
+          applyTranslations();
+        }
+        profileReady = true;
+        await load();
+      } catch (error) {
+        console.error('Failed to load WebApp locale profile', error);
+        profileReady = true;
+        await load();
+      } finally {
+        languageSelect.disabled = false;
+      }
+    };
+    initialize();
   </script>
 </body>
 </html>

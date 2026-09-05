@@ -7,6 +7,8 @@ import { buildMethodMixMessage, buildMethodReview, getUserMethodMix } from '../s
 import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
 import { getTelegramReminderSettings, sendTelegramReminderPreview, updateTelegramReminderSettings } from '../services/reminders';
 import { buildWebAppCheckinSummary } from '../services/chatSummary';
+import { Locale, botText, normalizeLocale } from '../i18n';
+import { getTelegramUserLocale, setTelegramUserLocale } from '../services/language';
 import moment from 'moment-timezone';
 import {
     createTelegramGroupReminderText,
@@ -24,30 +26,74 @@ export const bot = new Bot(env.telegramBotToken);
 
 const formatReminderTime = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
 
+const privateText = {
+    zh_TW: {
+        reminderTitle: '🔔 你的打卡提醒設定', enabled: '已開啟', disabled: '已關閉', status: '狀態', time: '時間', timezone: '時區', commands: '可用指令：',
+        reminderCommands: ['- `/remind`：查看目前設定', '- `/remind 21`：設為 21:00', '- `/remind on`：開啟提醒', '- `/remind off`：關閉提醒', '- `/remind tz Asia/Taipei`：設定時區'],
+        reminderOff: (time: string, timezone: string) => `🔕 已關閉每日打卡提醒。\n目前保留時間 ${time}（${timezone}）。\n之後可用 /remind on 重新開啟。`,
+        reminderOn: (time: string, timezone: string) => `✅ 已開啟每日打卡提醒：${time}（${timezone}）。`,
+        timezoneRequired: '請提供有效時區，例如：/remind tz Asia/Taipei 或 /remind tz America/New_York',
+        timezoneInvalid: '找不到這個時區。請使用 IANA 時區格式，例如：Asia/Taipei、America/New_York。',
+        timezoneSaved: (timezone: string, time: string) => `✅ 已將提醒時區設為 ${timezone}，目前提醒時間為 ${time}。`,
+        reminderFormat: '提醒設定格式錯誤。請用 /remind 21、/remind on、/remind off 或 /remind tz Asia/Taipei。',
+        reminderHourInvalid: '提醒時間請輸入 0 到 23 的整數，例如：/remind 7 或 /remind 21。',
+        reminderSaved: (time: string, timezone: string) => `✅ 已將每日提醒設為 ${time}（${timezone}），並自動開啟提醒。`,
+        reminderTest: (success: number, total: number) => `已送出提醒測試訊息：${success}/${total}`,
+        fullAnalysisButton: '📈 開啟完整功法分析'
+    },
+    zh_CN: {
+        reminderTitle: '🔔 你的打卡提醒设置', enabled: '已开启', disabled: '已关闭', status: '状态', time: '时间', timezone: '时区', commands: '可用命令：',
+        reminderCommands: ['- `/remind`：查看当前设置', '- `/remind 21`：设置为 21:00', '- `/remind on`：开启提醒', '- `/remind off`：关闭提醒', '- `/remind tz Asia/Shanghai`：设置时区'],
+        reminderOff: (time: string, timezone: string) => `🔕 已关闭每日打卡提醒。\n当前保留时间 ${time}（${timezone}）。\n之后可用 /remind on 重新开启。`,
+        reminderOn: (time: string, timezone: string) => `✅ 已开启每日打卡提醒：${time}（${timezone}）。`,
+        timezoneRequired: '请提供有效时区，例如：/remind tz Asia/Shanghai 或 /remind tz America/New_York',
+        timezoneInvalid: '找不到这个时区。请使用 IANA 时区格式，例如：Asia/Shanghai、America/New_York。',
+        timezoneSaved: (timezone: string, time: string) => `✅ 已将提醒时区设置为 ${timezone}，当前提醒时间为 ${time}。`,
+        reminderFormat: '提醒设置格式错误。请用 /remind 21、/remind on、/remind off 或 /remind tz Asia/Shanghai。',
+        reminderHourInvalid: '提醒时间请输入 0 到 23 的整数，例如：/remind 7 或 /remind 21。',
+        reminderSaved: (time: string, timezone: string) => `✅ 已将每日提醒设置为 ${time}（${timezone}），并自动开启提醒。`,
+        reminderTest: (success: number, total: number) => `已发送提醒测试消息：${success}/${total}`,
+        fullAnalysisButton: '📈 打开完整功法分析'
+    },
+    en: {
+        reminderTitle: '🔔 Your check-in reminder settings', enabled: 'On', disabled: 'Off', status: 'Status', time: 'Time', timezone: 'Time zone', commands: 'Available commands:',
+        reminderCommands: ['- `/remind`: View current settings', '- `/remind 21`: Set the time to 21:00', '- `/remind on`: Turn reminders on', '- `/remind off`: Turn reminders off', '- `/remind tz America/New_York`: Set the time zone'],
+        reminderOff: (time: string, timezone: string) => `🔕 Daily check-in reminders are off.\nThe saved time is ${time} (${timezone}).\nUse /remind on to turn them back on.`,
+        reminderOn: (time: string, timezone: string) => `✅ Daily check-in reminders are on at ${time} (${timezone}).`,
+        timezoneRequired: 'Provide a valid time zone, for example: /remind tz America/New_York or /remind tz Asia/Taipei',
+        timezoneInvalid: 'Time zone not found. Use an IANA time zone such as America/New_York or Asia/Taipei.',
+        timezoneSaved: (timezone: string, time: string) => `✅ Reminder time zone set to ${timezone}. The current reminder time is ${time}.`,
+        reminderFormat: 'Invalid reminder setting. Use /remind 21, /remind on, /remind off, or /remind tz America/New_York.',
+        reminderHourInvalid: 'Enter an integer from 0 to 23, for example: /remind 7 or /remind 21.',
+        reminderSaved: (time: string, timezone: string) => `✅ Daily reminder set to ${time} (${timezone}) and turned on.`,
+        reminderTest: (success: number, total: number) => `Reminder test sent: ${success}/${total}`,
+        fullAnalysisButton: '📈 Open full practice analysis'
+    }
+} satisfies Record<Locale, object>;
+
 const buildReminderSettingsMessage = (settings: {
     reminderEnabled: boolean;
     reminderHour: number;
     reminderTimezone: string;
-}) => {
+}, locale: Locale) => {
+    const text = privateText[locale];
+    const separator = locale === 'en' ? ': ' : '：';
     return [
-        '🔔 你的打卡提醒設定',
+        text.reminderTitle,
         '',
-        `狀態：${settings.reminderEnabled ? '已開啟' : '已關閉'}`,
-        `時間：${formatReminderTime(settings.reminderHour)}`,
-        `時區：${settings.reminderTimezone}`,
+        `${text.status}${separator}${settings.reminderEnabled ? text.enabled : text.disabled}`,
+        `${text.time}${separator}${formatReminderTime(settings.reminderHour)}`,
+        `${text.timezone}${separator}${settings.reminderTimezone}`,
         '',
-        '可用指令：',
-        '- `/remind`：查看目前設定',
-        '- `/remind 21`：設為 21:00',
-        '- `/remind on`：開啟提醒',
-        '- `/remind off`：關閉提醒',
-        '- `/remind tz Asia/Taipei`：設定時區'
+        text.commands,
+        ...text.reminderCommands
     ].join('\n');
 };
 
-const ensureUser = async (ctx: any) => {
-    if (!ctx.from) return;
-    await upsertTelegramUser({
+const ensureUser = async (ctx: any): Promise<Locale> => {
+    const fallbackLocale = normalizeLocale(ctx.from?.language_code);
+    if (!ctx.from) return fallbackLocale;
+    return upsertTelegramUser({
         id: ctx.from.id,
         username: ctx.from.username,
         first_name: ctx.from.first_name,
@@ -56,43 +102,33 @@ const ensureUser = async (ctx: any) => {
     });
 };
 
+const privateUserLocale = (ctx: any, locale: Locale): Locale => ctx.chat?.type === 'private' ? locale : 'zh_TW';
+
 const openCheckinWebApp = async (ctx: any) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (ctx.chat?.type !== 'private') {
         await ctx.reply('請到 Bot 私人聊天室使用 /checkin 開啟打卡表單。');
         return;
     }
-    const keyboard = new InlineKeyboard().webApp('✅ 開始打卡', env.telegramWebappUrl);
-    await ctx.reply('請點下方按鈕開啟打卡表單。', { reply_markup: keyboard });
+    const keyboard = new InlineKeyboard().webApp(botText[locale].checkinButton, env.telegramWebappUrl);
+    await ctx.reply(botText[locale].openCheckin, { reply_markup: keyboard });
 };
 
 bot.command('start', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (ctx.chat?.type !== 'private') {
         await ctx.reply('歡迎使用氣功打卡小幫手！請到 Bot 私人聊天室使用 /start 開啟完整功能選單。');
         return;
     }
+    void syncPrivateCommandMenu(ctx.chat.id, locale).catch((error) => console.error('[telegram-bot] failed to sync private command menu', error));
     const keyboard = new InlineKeyboard()
-        .webApp('✅ 開始打卡', env.telegramWebappUrl)
-        .webApp('🏆 排行榜', env.telegramLeaderboardWebappUrl)
+        .webApp(botText[locale].checkinButton, env.telegramWebappUrl)
+        .webApp(botText[locale].leaderboardButton, env.telegramLeaderboardWebappUrl)
         .row()
-        .webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl)
-        .webApp('📈 功法分析', env.telegramMethodAnalysisWebappUrl);
+        .webApp(botText[locale].achievementsButton, env.telegramAchievementsWebappUrl)
+        .webApp(botText[locale].analysisButton, env.telegramMethodAnalysisWebappUrl);
 
-    await ctx.reply(
-        [
-            '歡迎使用氣功打卡小幫手（Telegram 版）！',
-            '',
-            '你可以直接使用下方四個主要入口：',
-            '1. ✅ 打卡',
-            '2. 🏆 排行榜',
-            '3. 🏮 成就頁',
-            '4. 📈 功法分析',
-            '',
-            '每天練功、每天記錄，穩穩累積你的功力與成就。'
-        ].join('\n'),
-        { reply_markup: keyboard }
-    );
+    await ctx.reply(botText[locale].welcome, { reply_markup: keyboard });
 });
 
 bot.command('checkin', async (ctx) => {
@@ -105,83 +141,108 @@ bot.command('chickin', async (ctx) => {
 });
 
 bot.command('mystats', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
     const stats = await getUserStats(ctx.from.id);
-    await ctx.reply(await buildEnhancedUserStatsMessage(ctx.from.id, stats));
+    await ctx.reply(await buildEnhancedUserStatsMessage(ctx.from.id, stats, locale));
 });
 
 bot.command('badges', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
-    await ctx.reply(await buildBadgesMessage(ctx.from.id));
+    await ctx.reply(await buildBadgesMessage(ctx.from.id, locale));
 });
 
 bot.command('achievements', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (ctx.chat?.type !== 'private') {
         await ctx.reply('請到 Bot 私人聊天室使用 /achievements 開啟成就頁。');
         return;
     }
-    const keyboard = new InlineKeyboard().webApp('🏮 開啟成就頁', env.telegramAchievementsWebappUrl);
-    await ctx.reply('請點下方按鈕開啟你的成就頁。', { reply_markup: keyboard });
+    const keyboard = new InlineKeyboard().webApp(botText[locale].achievementsButton, env.telegramAchievementsWebappUrl);
+    await ctx.reply(botText[locale].openAchievements, { reply_markup: keyboard });
 });
 
 bot.command('leaderboard', async (ctx) => {
-    await ensureUser(ctx);
-    const keyboard = new InlineKeyboard().webApp('🏆 開啟排行榜', env.telegramLeaderboardWebappUrl);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
+    const keyboard = new InlineKeyboard().webApp(botText[locale].leaderboardButton, env.telegramLeaderboardWebappUrl);
     const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
-    await ctx.reply(await buildLeaderboardMessage('all'), options);
+    await ctx.reply(await buildLeaderboardMessage('all', locale), options);
 });
 
 bot.command('methodanalysis', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (ctx.chat?.type !== 'private') {
         await ctx.reply('請到 Bot 私人聊天室使用 /methodanalysis 開啟完整功法分析。');
         return;
     }
-    const keyboard = new InlineKeyboard().webApp('📈 開啟功法分析', env.telegramMethodAnalysisWebappUrl);
-    await ctx.reply('請點下方按鈕查看你的 30／90 天功法分析與練功點評。', { reply_markup: keyboard });
+    const keyboard = new InlineKeyboard().webApp(privateText[locale].fullAnalysisButton, env.telegramMethodAnalysisWebappUrl);
+    await ctx.reply(botText[locale].openAnalysis, { reply_markup: keyboard });
 });
 
 bot.command('weekly', async (ctx) => {
-    await ensureUser(ctx);
-    await ctx.reply(await buildLeaderboardMessage('week'));
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
+    await ctx.reply(await buildLeaderboardMessage('week', locale));
 });
 
 bot.command('monthly', async (ctx) => {
-    await ensureUser(ctx);
-    await ctx.reply(await buildLeaderboardMessage('month'));
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
+    await ctx.reply(await buildLeaderboardMessage('month', locale));
 });
 
 bot.command('quarterly', async (ctx) => {
-    await ensureUser(ctx);
-    await ctx.reply(await buildLeaderboardMessage('quarter'));
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
+    await ctx.reply(await buildLeaderboardMessage('quarter', locale));
 });
 
 bot.command('yearly', async (ctx) => {
-    await ensureUser(ctx);
-    await ctx.reply(await buildLeaderboardMessage('year'));
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
+    await ctx.reply(await buildLeaderboardMessage('year', locale));
 });
 
 bot.command('method30', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
-    const result = await getUserMethodMix(ctx.from.id, 30);
-    const review = await generateMethodReviewWithLlm(result, buildMethodReview(result), ctx.from.id);
-    const keyboard = new InlineKeyboard().webApp('📈 開啟完整功法分析', env.telegramMethodAnalysisWebappUrl);
+    const result = await getUserMethodMix(ctx.from.id, 30, locale);
+    const review = await generateMethodReviewWithLlm(result, buildMethodReview(result, locale), ctx.from.id, locale);
+    const keyboard = new InlineKeyboard().webApp(privateText[locale].fullAnalysisButton, env.telegramMethodAnalysisWebappUrl);
     const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
-    await ctx.reply(buildMethodMixMessage(result, review), options);
+    await ctx.reply(buildMethodMixMessage(result, review, locale), options);
 });
 
 bot.command('method90', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
-    const result = await getUserMethodMix(ctx.from.id, 90);
-    const review = await generateMethodReviewWithLlm(result, buildMethodReview(result), ctx.from.id);
-    const keyboard = new InlineKeyboard().webApp('📈 開啟完整功法分析', env.telegramMethodAnalysisWebappUrl);
+    const result = await getUserMethodMix(ctx.from.id, 90, locale);
+    const review = await generateMethodReviewWithLlm(result, buildMethodReview(result, locale), ctx.from.id, locale);
+    const keyboard = new InlineKeyboard().webApp(privateText[locale].fullAnalysisButton, env.telegramMethodAnalysisWebappUrl);
     const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
-    await ctx.reply(buildMethodMixMessage(result, review), options);
+    await ctx.reply(buildMethodMixMessage(result, review, locale), options);
+});
+
+bot.command('language', async (ctx) => {
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
+    if (ctx.chat?.type !== 'private') {
+        await ctx.reply('請到 Bot 私人聊天室使用 /language 設定介面語言。');
+        return;
+    }
+    const keyboard = new InlineKeyboard()
+        .text('繁體中文', 'language:zh_TW')
+        .text('简体中文', 'language:zh_CN')
+        .text('English', 'language:en');
+    await ctx.reply(botText[locale].languagePrompt, { reply_markup: keyboard });
+});
+
+bot.callbackQuery(/^language:(zh_TW|zh_CN|en)$/, async (ctx) => {
+    if (!ctx.from) return;
+    const locale = ctx.match[1] as Locale;
+    await ensureUser(ctx);
+    await setTelegramUserLocale(ctx.from.id, locale);
+    if (ctx.chat?.type === 'private') {
+        await syncPrivateCommandMenu(ctx.chat.id, locale);
+    }
+    await ctx.answerCallbackQuery();
+    await ctx.reply(botText[locale].languageSaved);
 });
 
 bot.on('my_chat_member', async (ctx) => {
@@ -327,12 +388,13 @@ bot.command('admin', async (ctx) => {
 });
 
 bot.command('remind', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
+    const text = privateText[locale];
 
     const rawInput = typeof ctx.match === 'string' ? ctx.match.trim() : '';
     if (!rawInput) {
-        await ctx.reply(buildReminderSettingsMessage(await getTelegramReminderSettings(ctx.from.id)));
+        await ctx.reply(buildReminderSettingsMessage(await getTelegramReminderSettings(ctx.from.id), locale));
         return;
     }
 
@@ -341,43 +403,41 @@ bot.command('remind', async (ctx) => {
 
     if (normalizedAction === 'off') {
         const settings = await updateTelegramReminderSettings(ctx.from.id, { reminderEnabled: false });
-        await ctx.reply(
-            `🔕 已關閉每日打卡提醒。\n目前保留時間 ${formatReminderTime(settings.reminderHour)}（${settings.reminderTimezone}）。\n之後可用 /remind on 重新開啟。`
-        );
+        await ctx.reply(text.reminderOff(formatReminderTime(settings.reminderHour), settings.reminderTimezone));
         return;
     }
 
     if (normalizedAction === 'on') {
         const settings = await updateTelegramReminderSettings(ctx.from.id, { reminderEnabled: true });
-        await ctx.reply(`✅ 已開啟每日打卡提醒：${formatReminderTime(settings.reminderHour)}（${settings.reminderTimezone}）。`);
+        await ctx.reply(text.reminderOn(formatReminderTime(settings.reminderHour), settings.reminderTimezone));
         return;
     }
 
     if (normalizedAction === 'tz') {
         const timezone = restParts.join(' ').trim();
         if (!timezone) {
-            await ctx.reply('請提供有效時區，例如：/remind tz Asia/Taipei 或 /remind tz America/New_York');
+            await ctx.reply(text.timezoneRequired);
             return;
         }
 
         if (!moment.tz.zone(timezone)) {
-            await ctx.reply('找不到這個時區。請使用 IANA 時區格式，例如：Asia/Taipei、America/New_York。');
+            await ctx.reply(text.timezoneInvalid);
             return;
         }
 
         const settings = await updateTelegramReminderSettings(ctx.from.id, { reminderTimezone: timezone });
-        await ctx.reply(`✅ 已將提醒時區設為 ${settings.reminderTimezone}，目前提醒時間為 ${formatReminderTime(settings.reminderHour)}。`);
+        await ctx.reply(text.timezoneSaved(settings.reminderTimezone, formatReminderTime(settings.reminderHour)));
         return;
     }
 
     if (!/^\d{1,2}$/.test(normalizedAction)) {
-        await ctx.reply('提醒設定格式錯誤。請用 /remind 21、/remind on、/remind off 或 /remind tz Asia/Taipei。');
+        await ctx.reply(text.reminderFormat);
         return;
     }
 
     const reminderHour = Number(normalizedAction);
     if (!Number.isInteger(reminderHour) || reminderHour < 0 || reminderHour > 23) {
-        await ctx.reply('提醒時間請輸入 0 到 23 的整數，例如：/remind 7 或 /remind 21。');
+        await ctx.reply(text.reminderHourInvalid);
         return;
     }
 
@@ -385,14 +445,14 @@ bot.command('remind', async (ctx) => {
         reminderEnabled: true,
         reminderHour
     });
-    await ctx.reply(`✅ 已將每日提醒設為 ${formatReminderTime(settings.reminderHour)}（${settings.reminderTimezone}），並自動開啟提醒。`);
+    await ctx.reply(text.reminderSaved(formatReminderTime(settings.reminderHour), settings.reminderTimezone));
 });
 
 bot.command('remindtest', async (ctx) => {
-    await ensureUser(ctx);
+    const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
     const result = await sendTelegramReminderPreview(ctx.from.id);
-    await ctx.reply(`已送出提醒測試訊息：${result.success}/${result.total}`);
+    await ctx.reply(privateText[locale].reminderTest(result.success, result.total));
 });
 
 bot.on('message:web_app_data', async (ctx) => {
@@ -403,7 +463,8 @@ bot.on('message:web_app_data', async (ctx) => {
         const payload = JSON.parse(raw);
         if (payload?.type !== 'checkin_summary') return;
 
-        await ctx.reply(buildWebAppCheckinSummary(payload));
+        const locale = await getTelegramUserLocale(ctx.from.id);
+        await ctx.reply(buildWebAppCheckinSummary(payload, locale));
     } catch (error) {
         console.error('[telegram-bot] failed to process web_app_data', error);
     }
@@ -434,22 +495,71 @@ export const telegramWebhook: RequestHandler = async (req, res, next) => {
     }
 };
 
+const commandMenus: Record<Locale, Array<{ command: string; description: string }>> = {
+    zh_TW: [
+        { command: 'start', description: '開始使用 / 顯示主選單' },
+        { command: 'checkin', description: '開始今日打卡' },
+        { command: 'achievements', description: '查看成就頁' },
+        { command: 'mystats', description: '查看我的練功統計' },
+        { command: 'badges', description: '查看我的勳章' },
+        { command: 'leaderboard', description: '總排行榜' },
+        { command: 'weekly', description: '本週排行榜' },
+        { command: 'monthly', description: '本月排行榜' },
+        { command: 'quarterly', description: '本季排行榜' },
+        { command: 'yearly', description: '本年排行榜' },
+        { command: 'methodanalysis', description: '開啟完整功法分析' },
+        { command: 'method30', description: '最近 30 天功法分析' },
+        { command: 'method90', description: '最近 90 天功法分析' },
+        { command: 'remind', description: '設定每日提醒時間 / 時區 / 開關' },
+        { command: 'remindtest', description: '送出一則提醒測試訊息' },
+        { command: 'language', description: '設定介面語言' }
+    ],
+    zh_CN: [
+        { command: 'start', description: '开始使用 / 显示主菜单' },
+        { command: 'checkin', description: '开始今日打卡' },
+        { command: 'achievements', description: '查看成就页' },
+        { command: 'mystats', description: '查看我的练功统计' },
+        { command: 'badges', description: '查看我的勋章' },
+        { command: 'leaderboard', description: '总排行榜' },
+        { command: 'weekly', description: '本周排行榜' },
+        { command: 'monthly', description: '本月排行榜' },
+        { command: 'quarterly', description: '本季度排行榜' },
+        { command: 'yearly', description: '本年排行榜' },
+        { command: 'methodanalysis', description: '打开完整功法分析' },
+        { command: 'method30', description: '最近 30 天功法分析' },
+        { command: 'method90', description: '最近 90 天功法分析' },
+        { command: 'remind', description: '设置每日提醒时间 / 时区 / 开关' },
+        { command: 'remindtest', description: '发送一条提醒测试消息' },
+        { command: 'language', description: '设置界面语言' }
+    ],
+    en: [
+        { command: 'start', description: 'Get started / show the main menu' },
+        { command: 'checkin', description: "Start today's check-in" },
+        { command: 'achievements', description: 'View achievements' },
+        { command: 'mystats', description: 'View my practice stats' },
+        { command: 'badges', description: 'View my badges' },
+        { command: 'leaderboard', description: 'All-time leaderboard' },
+        { command: 'weekly', description: 'Weekly leaderboard' },
+        { command: 'monthly', description: 'Monthly leaderboard' },
+        { command: 'quarterly', description: 'Quarterly leaderboard' },
+        { command: 'yearly', description: 'Yearly leaderboard' },
+        { command: 'methodanalysis', description: 'Open full practice analysis' },
+        { command: 'method30', description: '30-day practice analysis' },
+        { command: 'method90', description: '90-day practice analysis' },
+        { command: 'remind', description: 'Set reminder time, time zone, or status' },
+        { command: 'remindtest', description: 'Send a reminder test message' },
+        { command: 'language', description: 'Set interface language' }
+    ]
+};
+
+export const syncPrivateCommandMenu = (chatId: number, locale: Locale) =>
+    bot.api.setMyCommands(commandMenus[locale], { scope: { type: 'chat', chat_id: chatId } });
+
 export const setupBotCommands = async () => {
     try {
-        await bot.api.setMyCommands([
-            { command: 'start', description: '開始使用 / 顯示主選單' },
-            { command: 'checkin', description: '開始今日打卡' },
-            { command: 'achievements', description: '查看成就頁' },
-            { command: 'mystats', description: '查看我的練功統計' },
-            { command: 'badges', description: '查看我的勳章' },
-            { command: 'leaderboard', description: '總排行榜' },
-            { command: 'weekly', description: '本週排行榜' },
-            { command: 'monthly', description: '本月排行榜' },
-            { command: 'methodanalysis', description: '開啟完整功法分析' },
-            { command: 'method30', description: '最近 30 天功法分析' },
-            { command: 'method90', description: '最近 90 天功法分析' },
-            { command: 'remind', description: '設定每日提醒時間 / 時區 / 開關' },
-            { command: 'remindtest', description: '送出一則提醒測試訊息' }
+        await Promise.all([
+            bot.api.setMyCommands(commandMenus.zh_TW),
+            bot.api.setMyCommands(commandMenus.en, { scope: { type: 'default' }, language_code: 'en' })
         ]);
         console.log('[telegram-bot] command menu registered');
     } catch (error) {

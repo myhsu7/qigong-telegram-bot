@@ -6,6 +6,7 @@ import { env } from '../config/env';
 import { getDailyWisdom } from '../content/wisdom';
 import { getSolarTermGuide } from '../content/solarTerms';
 import { getTelegramApi } from './telegramApi';
+import { Locale, normalizeLocale } from '../i18n';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -18,12 +19,15 @@ export interface TelegramReminderSettings {
 interface ReminderRecipient {
     telegramUserId: number;
     reminderTimezone: string;
+    locale: Locale;
 }
 
 type ReminderSendErrorKind = 'network' | 'forbidden' | 'bad-request' | 'unknown';
 
-const getGreeting = (now: moment.Moment) => {
+const getGreeting = (now: moment.Moment, locale: Locale) => {
     const hour = now.hour();
+    if (locale === 'en') return hour >= 5 && hour < 11 ? '☀️ Good morning!' : hour >= 11 && hour < 17 ? '🌤 Good afternoon!' : '🌙 Good evening!';
+    if (locale === 'zh_CN') return hour >= 5 && hour < 11 ? '☀️ 早安！' : hour >= 11 && hour < 17 ? '🌤 午安！' : '🌙 晚安！';
     if (hour >= 5 && hour < 11) return '☀️ 早安！';
     if (hour >= 11 && hour < 17) return '🌤 午安！';
     return '🌙 晚安！';
@@ -88,12 +92,14 @@ const sendTelegramReminderMessageWithRetry = async (recipient: ReminderRecipient
     throw lastError;
 };
 
-const buildReminderText = (reminderTimezone: string) => {
+const buildReminderText = (reminderTimezone: string, locale: Locale) => {
     const now = moment().tz(reminderTimezone);
+    const greeting = getGreeting(now, locale);
+    if (locale === 'en') return `${greeting} It’s time for qigong practice!\n\nHave you practiced today? Complete your check-in and keep your rhythm going.\n\n👉 Use /checkin to begin today’s check-in`;
+    if (locale === 'zh_CN') return `${greeting} 练功时间到了！\n\n今天练功了吗？记得完成打卡，保持稳定的练功节奏！\n\n👉 请输入 /checkin 开始今日打卡`;
     const lunar = Lunar.fromDate(now.toDate());
     const currentJieQi = lunar.getJieQi();
     const guide = currentJieQi ? getSolarTermGuide(currentJieQi) : null;
-    const greeting = getGreeting(now);
 
     if (guide) {
         return [
@@ -121,7 +127,8 @@ const buildReminderText = (reminderTimezone: string) => {
 const getReminderRecipients = async () => {
     const { rows } = await db.query(
         `SELECT telegram_user_id,
-                COALESCE(reminder_timezone, $1) AS reminder_timezone
+                COALESCE(reminder_timezone, $1) AS reminder_timezone,
+                interface_locale
          FROM telegram_users
          WHERE COALESCE(reminder_enabled, TRUE) = TRUE
            AND EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE COALESCE(reminder_timezone, $1)))::int = COALESCE(reminder_hour, $2)
@@ -132,7 +139,8 @@ const getReminderRecipients = async () => {
     return rows
         .map((row) => ({
             telegramUserId: Number(row.telegram_user_id),
-            reminderTimezone: row.reminder_timezone || TIMEZONE
+            reminderTimezone: row.reminder_timezone || TIMEZONE,
+            locale: normalizeLocale(row.interface_locale)
         }))
         .filter((row) => Number.isFinite(row.telegramUserId));
 };
@@ -142,7 +150,7 @@ const sendReminderToTelegramUsers = async (recipients: ReminderRecipient[]) => {
     let success = 0;
     for (const recipient of recipients) {
         try {
-            await sendTelegramReminderMessageWithRetry(recipient, buildReminderText(recipient.reminderTimezone));
+            await sendTelegramReminderMessageWithRetry(recipient, buildReminderText(recipient.reminderTimezone, recipient.locale));
             success += 1;
             await new Promise((resolve) => setTimeout(resolve, 50));
         } catch (error) {
@@ -209,7 +217,8 @@ export const sendDailyTelegramReminder = async () => {
 
 export const sendTelegramReminderPreview = async (telegramUserId: number) => {
     const settings = await getTelegramReminderSettings(telegramUserId);
-    return sendReminderToTelegramUsers([{ telegramUserId, reminderTimezone: settings.reminderTimezone }]);
+    const { rows } = await db.query('SELECT interface_locale FROM telegram_users WHERE telegram_user_id = $1', [telegramUserId]);
+    return sendReminderToTelegramUsers([{ telegramUserId, reminderTimezone: settings.reminderTimezone, locale: normalizeLocale(rows[0]?.interface_locale) }]);
 };
 
 export const setupReminderCron = () => {

@@ -8,12 +8,44 @@ import { sendTelegramCheckinSummary } from '../services/chatSummary';
 import { getTelegramHistory } from '../services/history';
 import { buildMethodReview, getUserMethodMix, getUserPracticeJournal } from '../services/methodAnalysis';
 import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
+import { isLocale, Locale } from '../i18n';
+import { setTelegramUserLocale } from '../services/language';
+import { TelegramWebAppUser } from '../utils/telegramWebApp';
+import { syncPrivateCommandMenu } from '../bot/telegram';
 
 const router = Router();
 
 const resolveInitData = (req: Request) => {
     return req.header('x-telegram-init-data') || req.body?.initData || '';
 };
+
+const resolveUserLocale = async (req: Request, user: TelegramWebAppUser): Promise<Locale> => {
+    const storedLocale = await upsertTelegramUser(user);
+    const requestedLocale = typeof req.query.locale === 'string' && isLocale(req.query.locale) ? req.query.locale : null;
+    return requestedLocale || storedLocale;
+};
+
+router.get('/profile', async (req, res) => {
+    try {
+        const auth = verifyTelegramWebAppInitData(resolveInitData(req));
+        res.json({ locale: await upsertTelegramUser(auth.user) });
+    } catch (error) {
+        res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    }
+});
+
+router.patch('/profile/language', async (req, res) => {
+    try {
+        const auth = verifyTelegramWebAppInitData(resolveInitData(req));
+        await upsertTelegramUser(auth.user);
+        if (!isLocale(req.body?.locale)) return res.status(400).json({ error: 'Unsupported locale' });
+        await setTelegramUserLocale(auth.user.id, req.body.locale);
+        await syncPrivateCommandMenu(auth.user.id, req.body.locale);
+        res.json({ locale: req.body.locale });
+    } catch (error) {
+        res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    }
+});
 
 router.get('/practice-methods', async (req, res) => {
     const startedAt = Date.now();
@@ -32,7 +64,7 @@ router.get('/checkin/today', async (req, res) => {
     try {
         const initData = resolveInitData(req);
         const auth = verifyTelegramWebAppInitData(initData);
-        await upsertTelegramUser(auth.user);
+        await resolveUserLocale(req, auth.user);
         const data = await getTodayCheckin(auth.user.id);
         console.log(`[api] loaded today checkin in ${Date.now() - startedAt}ms for ${auth.user.id}`);
         res.json(data);
@@ -46,7 +78,7 @@ router.post('/checkin', async (req, res) => {
     try {
         const initData = resolveInitData(req);
         const auth = verifyTelegramWebAppInitData(initData);
-        await upsertTelegramUser(auth.user);
+        const locale = await resolveUserLocale(req, auth.user);
 
         const methodIds: number[] = Array.isArray(req.body?.methodIds)
             ? Array.from(new Set(
@@ -58,15 +90,15 @@ router.post('/checkin', async (req, res) => {
         const reflectionNote = typeof req.body?.reflectionNote === 'string' ? req.body.reflectionNote : '';
         const bodyFeelingNote = typeof req.body?.bodyFeelingNote === 'string' ? req.body.bodyFeelingNote : '';
 
-        const saved = await saveTodayCheckin(auth.user.id, methodIds, reflectionNote, bodyFeelingNote);
-        const unlockedBadges = await evaluateTelegramBadges(auth.user.id, saved.selectedMethodCodes);
+        const saved = await saveTodayCheckin(auth.user.id, methodIds, reflectionNote, bodyFeelingNote, locale);
+        const unlockedBadges = await evaluateTelegramBadges(auth.user.id, saved.selectedMethodCodes, locale);
         const stats = await getUserStats(auth.user.id);
         try {
             await sendTelegramCheckinSummary(auth.user.id, {
                 selectedMethods: saved.selectedMethods,
                 stats,
                 unlockedBadges
-            });
+            }, locale);
         } catch (summaryError) {
             console.error('[api] failed to send check-in summary to Telegram chat', summaryError);
         }
@@ -81,10 +113,10 @@ router.get('/history', async (req, res) => {
     try {
         const initData = resolveInitData(req);
         const auth = verifyTelegramWebAppInitData(initData);
-        await upsertTelegramUser(auth.user);
+        const locale = await resolveUserLocale(req, auth.user);
 
         const monthParam = typeof req.query.month === 'string' ? req.query.month : undefined;
-        const data = await getTelegramHistory(auth.user.id, monthParam);
+        const data = await getTelegramHistory(auth.user.id, monthParam, locale);
         res.json(data);
     } catch (error) {
         console.error('[api] failed to load history', error);
@@ -96,19 +128,19 @@ router.get('/achievements', async (req, res) => {
     try {
         const initData = resolveInitData(req);
         const auth = verifyTelegramWebAppInitData(initData);
-        await upsertTelegramUser(auth.user);
+        const locale = await resolveUserLocale(req, auth.user);
 
         const stats = await getUserStats(auth.user.id);
-        const badges = await getUserBadges(auth.user.id);
-        const levelTitle = getLevelTitle(stats.totalCheckins);
+        const badges = await getUserBadges(auth.user.id, locale);
+        const levelTitle = getLevelTitle(stats.totalCheckins, locale);
 
         let nextMilestone = null;
         if (stats.totalCheckins < 30) {
-            nextMilestone = { type: 'level', title: '築基 (Level 2)', remaining: 30 - stats.totalCheckins, unit: '天總打卡' };
+            nextMilestone = { type: 'level', title: getLevelTitle(30, locale), remaining: 30 - stats.totalCheckins, unit: locale === 'en' ? 'total check-in days' : locale === 'zh_CN' ? '天总打卡' : '天總打卡' };
         } else if (stats.totalCheckins < 90) {
-            nextMilestone = { type: 'level', title: '結丹 (Level 3)', remaining: 90 - stats.totalCheckins, unit: '天總打卡' };
+            nextMilestone = { type: 'level', title: getLevelTitle(90, locale), remaining: 90 - stats.totalCheckins, unit: locale === 'en' ? 'total check-in days' : locale === 'zh_CN' ? '天总打卡' : '天總打卡' };
         } else if (stats.totalCheckins < 200) {
-            nextMilestone = { type: 'level', title: '化境 (Level 4)', remaining: 200 - stats.totalCheckins, unit: '天總打卡' };
+            nextMilestone = { type: 'level', title: getLevelTitle(200, locale), remaining: 200 - stats.totalCheckins, unit: locale === 'en' ? 'total check-in days' : locale === 'zh_CN' ? '天总打卡' : '天總打卡' };
         }
 
         res.json({ stats, badges, levelTitle, nextMilestone });
@@ -126,7 +158,7 @@ router.get('/leaderboard', async (req, res) => {
         return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
     try {
-        await upsertTelegramUser(auth.user);
+        await resolveUserLocale(req, auth.user);
         const period = typeof req.query.period === 'string' ? req.query.period : 'week';
         if (!['week', 'month', 'quarter', 'year', 'all'].includes(period)) {
             return res.status(400).json({ error: 'Invalid period' });
@@ -162,15 +194,15 @@ router.get('/method-analysis', async (req, res) => {
         return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
     }
     try {
-        await upsertTelegramUser(auth.user);
+        const locale = await resolveUserLocale(req, auth.user);
         const [analysis30, analysis90, journal] = await Promise.all([
-            getUserMethodMix(auth.user.id, 30),
-            getUserMethodMix(auth.user.id, 90),
-            getUserPracticeJournal(auth.user.id)
+            getUserMethodMix(auth.user.id, 30, locale),
+            getUserMethodMix(auth.user.id, 90, locale),
+            getUserPracticeJournal(auth.user.id, 12, locale)
         ]);
         const [reviewText30, reviewText90] = await Promise.all([
-            generateMethodReviewWithLlm(analysis30, buildMethodReview(analysis30), auth.user.id),
-            generateMethodReviewWithLlm(analysis90, buildMethodReview(analysis90), auth.user.id)
+            generateMethodReviewWithLlm(analysis30, buildMethodReview(analysis30, locale), auth.user.id, locale),
+            generateMethodReviewWithLlm(analysis90, buildMethodReview(analysis90, locale), auth.user.id, locale)
         ]);
         res.json({ analysis30, analysis90, reviewText: reviewText30, reviewText30, reviewText90, journal });
     } catch (error) {

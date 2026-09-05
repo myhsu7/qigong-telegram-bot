@@ -2,7 +2,8 @@ import moment from 'moment-timezone';
 import { db } from '../db';
 import { GroupedBadge, getGroupedUserBadges } from './badges';
 import { getUserStats, UserStats } from './stats';
-import { getGroupedMethodRowsForLeafIds, getMethodTaxonomy } from './taxonomy';
+import { getGroupedMethodRowsForLeafIds, getLocalizedMethodName, getMethodTaxonomy } from './taxonomy';
+import { Locale } from '../i18n';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -27,7 +28,8 @@ export interface TelegramHistoryResponse {
 
 export const getTelegramHistory = async (
     telegramUserId: number,
-    monthParam?: string | null
+    monthParam?: string | null,
+    locale: Locale = 'zh_TW'
 ): Promise<TelegramHistoryResponse> => {
     const now = moment().tz(TIMEZONE);
     let targetMonth = now.clone();
@@ -65,7 +67,7 @@ export const getTelegramHistory = async (
             [telegramUserId, monthStart, monthEnd]
         ),
         getUserStats(telegramUserId),
-        getGroupedUserBadges(telegramUserId)
+        getGroupedUserBadges(telegramUserId, locale)
     ]);
 
     const entries: TelegramHistoryEntry[] = logsRes.rows.map((row) => {
@@ -76,10 +78,11 @@ export const getTelegramHistory = async (
         return {
             id: row.id,
             date: row.checkin_date,
-            groupedMethods: getGroupedMethodRowsForLeafIds(methodIds, taxonomy).map((method) => method.nameZh),
-            leafMethods: Array.isArray(row.leaf_method_names)
-                ? row.leaf_method_names.filter((name: string | null) => typeof name === 'string')
-                : [],
+            groupedMethods: getGroupedMethodRowsForLeafIds(methodIds, taxonomy).map((method) => getLocalizedMethodName(method, locale)),
+            leafMethods: methodIds.flatMap((methodId: number) => {
+                const method = taxonomy.rowById.get(methodId);
+                return method ? [getLocalizedMethodName(method, locale)] : [];
+            }),
             reflectionNote: row.reflection_note || '',
             bodyFeelingNote: row.body_feeling_note || '',
             source: row.source || null,
@@ -88,7 +91,7 @@ export const getTelegramHistory = async (
 
     return {
         month: targetMonth.format('YYYY-MM'),
-        monthLabel: targetMonth.format('YYYY年 MM月'),
+        monthLabel: locale === 'en' ? targetMonth.locale('en').format('MMMM YYYY') : targetMonth.format('YYYY年 MM月'),
         entries,
         stats,
         checkinDaysInMonth: entries.length,

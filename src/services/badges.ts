@@ -4,6 +4,7 @@ import { db } from '../db';
 import { getUserStats } from './stats';
 import { getMethodTaxonomy } from './taxonomy';
 import { getSanFuPeriod } from '../utils/sanfu';
+import { Locale, localizeBadge } from '../i18n';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -68,7 +69,7 @@ const hasBadge = async (telegramUserId: number, badgeId: string, earnedYear: num
     return rows.length > 0;
 };
 
-const awardBadge = async (telegramUserId: number, badgeId: string, earnedYear: number): Promise<UnlockedBadge | null> => {
+const awardBadge = async (telegramUserId: number, badgeId: string, earnedYear: number, locale: Locale): Promise<UnlockedBadge | null> => {
     if (await hasBadge(telegramUserId, badgeId, earnedYear)) return null;
 
     await db.query(
@@ -82,13 +83,14 @@ const awardBadge = async (telegramUserId: number, badgeId: string, earnedYear: n
     );
     if (rows.length === 0) return null;
 
-    return {
+    return localizeBadge({
         badgeId: rows[0].id,
+        id: rows[0].id,
         name: rows[0].name,
         emoji: rows[0].emoji || '',
         description: rows[0].description || '',
         earnedYear
-    };
+    }, locale);
 };
 
 const getMethodDictCTE = () => {
@@ -147,7 +149,7 @@ const getJieQiDateStr = (year: number, jieQiName: string): string | null => {
     return jieQi ? jieQi.toYmd() : null;
 };
 
-export const evaluateTelegramBadges = async (telegramUserId: number, selectedMethodCodes: string[]): Promise<UnlockedBadge[]> => {
+export const evaluateTelegramBadges = async (telegramUserId: number, selectedMethodCodes: string[], locale: Locale = 'zh_TW'): Promise<UnlockedBadge[]> => {
     const unlocked: UnlockedBadge[] = [];
     const stats = await getUserStats(telegramUserId);
     const now = moment().tz(TIMEZONE);
@@ -164,7 +166,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
     ];
     for (const [threshold, badgeId] of streakChecks) {
         if (stats.currentStreak >= threshold) {
-            const badge = await awardBadge(telegramUserId, badgeId, 0);
+            const badge = await awardBadge(telegramUserId, badgeId, 0, locale);
             if (badge) unlocked.push(badge);
         }
     }
@@ -176,7 +178,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
     ];
     for (const [threshold, badgeId] of totalChecks) {
         if (stats.totalCheckins >= threshold) {
-            const badge = await awardBadge(telegramUserId, badgeId, 0);
+            const badge = await awardBadge(telegramUserId, badgeId, 0, locale);
             if (badge) unlocked.push(badge);
         }
     }
@@ -195,11 +197,11 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
             if (hour < 21 || hour >= 23) allNight = false;
         }
         if (allMorning) {
-            const badge = await awardBadge(telegramUserId, 'time_morning', 0);
+            const badge = await awardBadge(telegramUserId, 'time_morning', 0, locale);
             if (badge) unlocked.push(badge);
         }
         if (allNight) {
-            const badge = await awardBadge(telegramUserId, 'time_night', 0);
+            const badge = await awardBadge(telegramUserId, 'time_night', 0, locale);
             if (badge) unlocked.push(badge);
         }
     }
@@ -214,7 +216,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
             [telegramUserId, sanFuPeriod.start.format('YYYY-MM-DD'), sanFuPeriod.end.format('YYYY-MM-DD')]
         );
         if (parseInt(rows[0].count, 10) >= sanFuPeriod.totalDays) {
-            const badge = await awardBadge(telegramUserId, 'seasonal_summer_27', currentYear);
+            const badge = await awardBadge(telegramUserId, 'seasonal_summer_27', currentYear, locale);
             if (badge) unlocked.push(badge);
         }
     }
@@ -248,7 +250,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
                 ]
             );
             if (parseInt(rows[0].count, 10) >= 27) {
-                const badge = await awardBadge(telegramUserId, 'seasonal_winter_27', currentYear);
+                const badge = await awardBadge(telegramUserId, 'seasonal_winter_27', currentYear, locale);
                 if (badge) unlocked.push(badge);
             }
         }
@@ -260,7 +262,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
             if (requiredLeafCodes.length === 0) continue;
             if (!requiredLeafCodes.every((code) => selectedCodeSet.has(code))) continue;
 
-            const badge = await awardBadge(telegramUserId, combo.badgeId, currentYear);
+            const badge = await awardBadge(telegramUserId, combo.badgeId, currentYear, locale);
             if (badge) unlocked.push(badge);
         }
     }
@@ -271,7 +273,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
         for (const threshold of METHOD_DAY_THRESHOLDS) {
             if (matchedDays < threshold) continue;
 
-            const badge = await awardBadge(telegramUserId, `${group.prefix}_${threshold}`, 0);
+            const badge = await awardBadge(telegramUserId, `${group.prefix}_${threshold}`, 0, locale);
             if (badge) unlocked.push(badge);
         }
     }
@@ -279,20 +281,20 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
     return unlocked;
 };
 
-export const getUserBadges = async (telegramUserId: number) => {
+export const getUserBadges = async (telegramUserId: number, locale: Locale = 'zh_TW') => {
     const { rows } = await db.query(
-        `SELECT b.emoji, b.name, b.description, ub.earned_year, ub.unlocked_at
+        `SELECT b.id, b.emoji, b.name, b.description, ub.earned_year, ub.unlocked_at
          FROM telegram_user_badges ub
          JOIN telegram_badges b ON b.id = ub.badge_id
          WHERE ub.telegram_user_id = $1
          ORDER BY ub.unlocked_at ASC`,
         [telegramUserId]
     );
-    return rows;
+    return rows.map((row) => localizeBadge(row, locale));
 };
 
-export const getGroupedUserBadges = async (telegramUserId: number): Promise<GroupedBadge[]> => {
-    const badges = await getUserBadges(telegramUserId);
+export const getGroupedUserBadges = async (telegramUserId: number, locale: Locale = 'zh_TW'): Promise<GroupedBadge[]> => {
+    const badges = await getUserBadges(telegramUserId, locale);
     const grouped = new Map<string, GroupedBadge>();
 
     badges.forEach((badge) => {

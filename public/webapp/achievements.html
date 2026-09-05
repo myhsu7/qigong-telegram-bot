@@ -45,6 +45,8 @@
     .note-block { margin-top:12px; padding-top:12px; border-top:1px solid #f1f5f9; }
     .note-label { font-size:12px; font-weight:700; color:#6b7280; letter-spacing:.04em; text-transform:uppercase; margin-bottom:4px; }
     .section-space { margin-top:16px; }
+    .language-row { display:flex; justify-content:flex-end; margin-bottom:12px; }
+    .language-select { border:1px solid #d1d5db; border-radius:10px; background:#fff; color:#1f2937; padding:8px 10px; font-size:14px; }
     @media (max-width: 640px) {
       .container { padding: 14px; }
       .stat-grid { grid-template-columns: 1fr; }
@@ -55,12 +57,13 @@
 </head>
 <body>
   <div class="container">
+    <div class="language-row"><select id="languageSelect" class="language-select" aria-label="語言"><option value="zh_TW">繁體中文</option><option value="zh_CN">简体中文</option><option value="en">English</option></select></div>
     <div class="card">
-      <h1>🏮 我的修練</h1>
-      <div class="muted">查看你的境界、勳章與每月打卡記錄。</div>
+      <h1 data-i18n="heading">🏮 我的修練</h1>
+      <div class="muted" data-i18n="subtitle">查看你的境界、勳章與每月打卡記錄。</div>
       <div class="tabs">
-        <button id="tabAchievements" class="tab-btn active" type="button">成就總覽</button>
-        <button id="tabHistory" class="tab-btn" type="button">歷史記錄</button>
+        <button id="tabAchievements" class="tab-btn active" type="button" data-i18n="achievementsTab">成就總覽</button>
+        <button id="tabHistory" class="tab-btn" type="button" data-i18n="historyTab">歷史記錄</button>
       </div>
     </div>
 
@@ -70,34 +73,34 @@
       </div>
 
       <div class="card">
-        <h2>🏆 榮譽勳章</h2>
+        <h2 data-i18n="badgesHeading">🏆 榮譽勳章</h2>
         <div id="badgeGrid" class="badge-grid"></div>
-        <div id="badgeEmpty" class="empty" style="display:none;">目前還沒有勳章，持續打卡很快就會有第一枚成就！</div>
+        <div id="badgeEmpty" class="empty" style="display:none;" data-i18n="badgeEmpty">目前還沒有勳章，持續打卡很快就會有第一枚成就！</div>
       </div>
     </div>
 
     <div id="panelHistory" class="tab-panel">
       <div class="card">
         <div class="month-nav">
-          <button id="prevMonth" type="button">← 上個月</button>
+          <button id="prevMonth" type="button" data-i18n="prevMonth">← 上個月</button>
           <div>
-            <div id="historyMonthLabel" style="font-size:18px;font-weight:700;">載入中...</div>
-            <div class="muted">每月打卡摘要與功法分組</div>
+            <div id="historyMonthLabel" style="font-size:18px;font-weight:700;"></div>
+            <div class="muted" data-i18n="historySubtitle">每月打卡摘要與功法分組</div>
           </div>
-          <button id="nextMonth" type="button">下個月 →</button>
+          <button id="nextMonth" type="button" data-i18n="nextMonth">下個月 →</button>
         </div>
         <div id="historySummary"></div>
         <div class="section-space">
-          <div style="font-weight:700; margin-bottom:10px;">勳章紀錄</div>
+          <div style="font-weight:700; margin-bottom:10px;" data-i18n="badgeHistory">勳章紀錄</div>
           <div id="historyBadges" class="pill-row"></div>
-          <div id="historyBadgesEmpty" class="muted" style="display:none;">目前還沒有勳章，繼續累積打卡吧。</div>
+          <div id="historyBadgesEmpty" class="muted" style="display:none;" data-i18n="historyBadgesEmpty">目前還沒有勳章，繼續累積打卡吧。</div>
         </div>
       </div>
 
       <div class="card">
-        <h2>📜 打卡記錄</h2>
+        <h2 data-i18n="historyHeading">📜 打卡記錄</h2>
         <div id="historyList" class="entry-list"></div>
-        <div id="historyEmpty" class="empty" style="display:none;">這個月份還沒有打卡記錄。</div>
+        <div id="historyEmpty" class="empty" style="display:none;" data-i18n="historyEmpty">這個月份還沒有打卡記錄。</div>
       </div>
     </div>
   </div>
@@ -106,8 +109,19 @@
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
     const initData = tg?.initData || '';
+    const translations = {
+      zh_TW: { title:'我的成就', language:'語言', heading:'🏮 我的修練', subtitle:'查看你的境界、勳章與每月打卡記錄。', achievementsTab:'成就總覽', historyTab:'歷史記錄', badgesHeading:'🏆 榮譽勳章', badgeEmpty:'目前還沒有勳章，持續打卡很快就會有第一枚成就！', prevMonth:'← 上個月', nextMonth:'下個月 →', loading:'載入中...', historySubtitle:'每月打卡摘要與功法分組', badgeHistory:'勳章紀錄', historyBadgesEmpty:'目前還沒有勳章，繼續累積打卡吧。', historyHeading:'📜 打卡記錄', historyEmpty:'這個月份還沒有打卡記錄。', currentLevel:'【當前境界】', milestone:(title,n,unit)=>`距離 ${title} 還差 ${n} ${unit}`, maxLevel:'你已達到目前最高等級，持續精進！', currentStreak:'目前連續打卡', longestStreak:'最長連續打卡', totalCheckins:'總打卡天數', lastCheckin:'最近打卡日期', monthCheckins:'本月打卡天數', cumulativeCheckins:'累計總打卡', days:(n)=>`${n} 天`, reflection:'心得', feeling:'身體感受', weekdays:['週日','週一','週二','週三','週四','週五','週六'], authError:'請從 Telegram App 內開啟成就頁。', requestFailed:'請求失敗', loadFailed:'載入失敗：' },
+      zh_CN: { title:'我的成就', language:'语言', heading:'🏮 我的修炼', subtitle:'查看你的境界、勋章与每月打卡记录。', achievementsTab:'成就总览', historyTab:'历史记录', badgesHeading:'🏆 荣誉勋章', badgeEmpty:'目前还没有勋章，持续打卡很快就会有第一枚成就！', prevMonth:'← 上个月', nextMonth:'下个月 →', loading:'加载中...', historySubtitle:'每月打卡摘要与功法分组', badgeHistory:'勋章记录', historyBadgesEmpty:'目前还没有勋章，继续累积打卡吧。', historyHeading:'📜 打卡记录', historyEmpty:'这个月份还没有打卡记录。', currentLevel:'【当前境界】', milestone:(title,n,unit)=>`距离 ${title} 还差 ${n} ${unit}`, maxLevel:'你已达到目前最高等级，继续精进！', currentStreak:'目前连续打卡', longestStreak:'最长连续打卡', totalCheckins:'总打卡天数', lastCheckin:'最近打卡日期', monthCheckins:'本月打卡天数', cumulativeCheckins:'累计总打卡', days:(n)=>`${n} 天`, reflection:'心得', feeling:'身体感受', weekdays:['周日','周一','周二','周三','周四','周五','周六'], authError:'请从 Telegram App 内打开成就页。', requestFailed:'请求失败', loadFailed:'加载失败：' },
+      en: { title:'My Achievements', language:'Language', heading:'🏮 My Practice', subtitle:'View your level, badges, and monthly check-in history.', achievementsTab:'Achievements', historyTab:'History', badgesHeading:'🏆 Honor Badges', badgeEmpty:'No badges yet. Keep checking in to earn your first achievement!', prevMonth:'← Previous', nextMonth:'Next →', loading:'Loading...', historySubtitle:'Monthly check-in summary and method groups', badgeHistory:'Badge History', historyBadgesEmpty:'No badges yet. Keep building your check-in record.', historyHeading:'📜 Check-in History', historyEmpty:'No check-ins in this month.', currentLevel:'Current level: ', milestone:(title,n,unit)=>`${n} ${unit} until ${title}`, maxLevel:'You have reached the highest current level. Keep progressing!', currentStreak:'Current streak', longestStreak:'Longest streak', totalCheckins:'Total check-in days', lastCheckin:'Latest check-in', monthCheckins:'Check-in days this month', cumulativeCheckins:'All-time check-ins', days:(n)=>`${n} ${Number(n) === 1 ? 'day' : 'days'}`, reflection:'Reflection', feeling:'Physical sensations', weekdays:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], authError:'Please open Achievements in the Telegram app.', requestFailed:'Request failed', loadFailed:'Could not load: ' }
+    };
+    const localeKey = 'qigong_telegram_locale';
+    const mapLocale = (code) => ['zh-hans','zh-cn','zh-sg'].includes(String(code).toLowerCase()) ? 'zh_CN' : (/^en(?:-|$)/i.test(String(code)) ? 'en' : 'zh_TW');
+    const storedLocale = localStorage.getItem(localeKey);
+    let locale = translations[storedLocale] ? storedLocale : mapLocale(tg?.initDataUnsafe?.user?.language_code || '');
+    let t = translations[locale];
     const currentTab = { value: 'achievements' };
     const historyState = { month: null, loaded: false };
+    let profileReady = false;
 
     const currentMonthText = (() => {
       const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
@@ -133,17 +147,34 @@
 
     const getWeekdayLabel = (dateText) => {
       const weekday = new Date(`${dateText}T00:00:00`).getDay();
-      return ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][weekday] || '';
+      return t.weekdays[weekday] || '';
     };
 
-    const apiFetch = async (url) => {
-      const res = await fetch(url, { headers: { 'x-telegram-init-data': initData } });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(body.error || 'Request failed');
-      }
-      return res.json();
+    const getMonthLabel = (monthText) => {
+      const [year, month] = monthText.split('-').map(Number);
+      return new Intl.DateTimeFormat(locale === 'en' ? 'en' : locale === 'zh_CN' ? 'zh-CN' : 'zh-TW', {
+        year: 'numeric', month: 'long', timeZone: 'UTC'
+      }).format(new Date(Date.UTC(year, month - 1, 1)));
     };
+
+    const apiFetch = async (url, options = {}, includeLocale = true) => {
+      if (!initData) throw new Error(t.authError);
+      const localizedUrl = `${url}${url.includes('?') ? '&' : '?'}locale=${encodeURIComponent(locale)}`;
+      const headers = new Headers(options.headers || {});
+      headers.set('x-telegram-init-data', initData);
+      if (!headers.has('Content-Type') && options.method && options.method !== 'GET') headers.set('Content-Type', 'application/json');
+      const res = await fetch(includeLocale ? localizedUrl : url, { ...options, headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: t.requestFailed }));
+        throw new Error(body.error || t.requestFailed);
+      }
+      return res.status === 204 ? null : res.json();
+    };
+
+    const persistProfileLocale = (nextLocale) => apiFetch('/telegram/api/webapp/profile/language', {
+      method: 'PATCH',
+      body: JSON.stringify({ locale: nextLocale })
+    }, false);
 
     const renderAchievements = (data) => {
       const stats = data.stats;
@@ -155,14 +186,14 @@
       else if (stats.totalCheckins < 200) progressPercent = ((stats.totalCheckins - 90) / 110) * 100;
 
       document.getElementById('summary').innerHTML = `
-        <div style="font-size:18px;font-weight:700;">【當前境界】${escapeHtml(data.levelTitle)}</div>
+        <div style="font-size:18px;font-weight:700;">${t.currentLevel}${escapeHtml(data.levelTitle)}</div>
         <div class="progress-wrap"><div class="progress-bar" style="width:${Math.max(0, Math.min(progressPercent, 100)).toFixed(1)}%"></div></div>
-        <div class="muted" style="margin-top:8px;">${nextMilestone ? `距離 ${escapeHtml(nextMilestone.title)} 還差 ${nextMilestone.remaining} ${escapeHtml(nextMilestone.unit)}` : '你已達到目前最高等級，持續精進！'}</div>
+        <div class="muted" style="margin-top:8px;">${nextMilestone ? t.milestone(escapeHtml(nextMilestone.title), Number(nextMilestone.remaining), escapeHtml(nextMilestone.unit)) : t.maxLevel}</div>
         <div class="stat-grid">
-          <div class="stat"><div class="label">目前連續打卡</div><div class="value">${stats.currentStreak} 天</div></div>
-          <div class="stat"><div class="label">最長連續打卡</div><div class="value">${stats.longestStreak} 天</div></div>
-          <div class="stat"><div class="label">總打卡天數</div><div class="value">${stats.totalCheckins} 天</div></div>
-          <div class="stat"><div class="label">最近打卡日期</div><div class="value" style="font-size:18px;">${escapeHtml(stats.lastCheckinDate || '-')}</div></div>
+          <div class="stat"><div class="label">${t.currentStreak}</div><div class="value">${t.days(stats.currentStreak)}</div></div>
+          <div class="stat"><div class="label">${t.longestStreak}</div><div class="value">${t.days(stats.longestStreak)}</div></div>
+          <div class="stat"><div class="label">${t.totalCheckins}</div><div class="value">${t.days(stats.totalCheckins)}</div></div>
+          <div class="stat"><div class="label">${t.lastCheckin}</div><div class="value" style="font-size:18px;">${escapeHtml(stats.lastCheckinDate || '-')}</div></div>
         </div>
       `;
 
@@ -193,15 +224,15 @@
       historyState.month = data.month;
       historyState.loaded = true;
 
-      document.getElementById('historyMonthLabel').textContent = data.monthLabel;
+      document.getElementById('historyMonthLabel').textContent = getMonthLabel(data.month);
       document.getElementById('nextMonth').disabled = data.month >= currentMonthText;
 
       document.getElementById('historySummary').innerHTML = `
         <div class="stat-grid">
-          <div class="stat"><div class="label">本月打卡天數</div><div class="value">${data.checkinDaysInMonth} 天</div></div>
-          <div class="stat"><div class="label">目前連續打卡</div><div class="value">${data.stats.currentStreak} 天</div></div>
-          <div class="stat"><div class="label">最長連續打卡</div><div class="value">${data.stats.longestStreak} 天</div></div>
-          <div class="stat"><div class="label">累計總打卡</div><div class="value">${data.stats.totalCheckins} 天</div></div>
+          <div class="stat"><div class="label">${t.monthCheckins}</div><div class="value">${t.days(data.checkinDaysInMonth)}</div></div>
+          <div class="stat"><div class="label">${t.currentStreak}</div><div class="value">${t.days(data.stats.currentStreak)}</div></div>
+          <div class="stat"><div class="label">${t.longestStreak}</div><div class="value">${t.days(data.stats.longestStreak)}</div></div>
+          <div class="stat"><div class="label">${t.cumulativeCheckins}</div><div class="value">${t.days(data.stats.totalCheckins)}</div></div>
         </div>
       `;
 
@@ -239,10 +270,10 @@
         const groupedTags = (entry.groupedMethods || []).map((name) => `<span class="pill group-tag">${escapeHtml(name)}</span>`).join('');
         const leafTags = (entry.leafMethods || []).map((name) => `<span class="pill leaf-tag">${escapeHtml(name)}</span>`).join('');
         const reflection = entry.reflectionNote
-          ? `<div class="note-block"><div class="note-label">心得</div><div>${escapeHtml(entry.reflectionNote)}</div></div>`
+          ? `<div class="note-block"><div class="note-label">${t.reflection}</div><div>${escapeHtml(entry.reflectionNote)}</div></div>`
           : '';
         const bodyFeeling = entry.bodyFeelingNote
-          ? `<div class="note-block"><div class="note-label">身體感受</div><div>${escapeHtml(entry.bodyFeelingNote)}</div></div>`
+          ? `<div class="note-block"><div class="note-label">${t.feeling}</div><div>${escapeHtml(entry.bodyFeelingNote)}</div></div>`
           : '';
 
         card.innerHTML = `
@@ -262,18 +293,23 @@
     };
 
     const loadAchievements = async () => {
+      if (!profileReady && initData) return;
+      document.getElementById('summary').innerHTML = `<div class="muted">${t.loading}</div>`;
       try {
         renderAchievements(await apiFetch('/telegram/api/webapp/achievements'));
       } catch (error) {
-        document.getElementById('summary').innerHTML = `<div class="muted">載入失敗：${escapeHtml(error.message)}</div>`;
+        document.getElementById('summary').innerHTML = `<div class="muted">${t.loadFailed}${escapeHtml(error.message)}</div>`;
       }
     };
 
     const loadHistory = async (monthText) => {
+      if (!profileReady && initData) return;
+      document.getElementById('historyMonthLabel').textContent = t.loading;
+      document.getElementById('historySummary').textContent = '';
       try {
         renderHistory(await apiFetch(`/telegram/api/webapp/history?month=${encodeURIComponent(monthText)}`));
       } catch (error) {
-        document.getElementById('historySummary').innerHTML = `<div class="muted">載入失敗：${escapeHtml(error.message)}</div>`;
+        document.getElementById('historySummary').innerHTML = `<div class="muted">${t.loadFailed}${escapeHtml(error.message)}</div>`;
       }
     };
 
@@ -298,7 +334,57 @@
       loadHistory(shiftMonth(historyState.month, 1));
     });
 
-    loadAchievements();
+    const languageSelect = document.getElementById('languageSelect');
+    const applyTranslations = () => {
+      t = translations[locale];
+      document.documentElement.lang = locale === 'en' ? 'en' : locale === 'zh_CN' ? 'zh-Hans' : 'zh-Hant';
+      document.title = t.title;
+      document.querySelectorAll('[data-i18n]').forEach((element) => { element.textContent = t[element.dataset.i18n]; });
+      languageSelect.value = locale;
+      languageSelect.setAttribute('aria-label', t.language);
+    };
+    languageSelect.addEventListener('change', async () => {
+      const nextLocale = languageSelect.value;
+      languageSelect.disabled = true;
+      try {
+        await persistProfileLocale(nextLocale);
+        locale = nextLocale;
+        localStorage.setItem(localeKey, locale);
+        applyTranslations();
+        historyState.loaded = false;
+        await loadAchievements();
+        if (currentTab.value === 'history') await loadHistory(historyState.month || currentMonthText);
+      } catch (error) {
+        console.error('Failed to persist WebApp locale', error);
+        applyTranslations();
+      } finally {
+        languageSelect.disabled = false;
+      }
+    });
+
+    const initialize = async () => {
+      applyTranslations();
+      languageSelect.disabled = true;
+      try {
+        if (initData) {
+          const profile = await apiFetch('/telegram/api/webapp/profile', {}, false);
+          if (translations[profile.locale]) locale = profile.locale;
+          localStorage.setItem(localeKey, locale);
+          applyTranslations();
+        }
+        profileReady = true;
+        await loadAchievements();
+        if (currentTab.value === 'history') await loadHistory(historyState.month || currentMonthText);
+      } catch (error) {
+        console.error('Failed to load WebApp locale profile', error);
+        profileReady = true;
+        await loadAchievements();
+        if (currentTab.value === 'history') await loadHistory(historyState.month || currentMonthText);
+      } finally {
+        languageSelect.disabled = false;
+      }
+    };
+    initialize();
   </script>
 </body>
 </html>

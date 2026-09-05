@@ -7,6 +7,7 @@ Telegram version of the Qigong check-in companion bot.
 - Telegram bot webhook receiver
 - `/start`, `/checkin`, `/mystats`, `/badges`, `/achievements`, `/leaderboard`, `/weekly`, `/monthly`, `/quarterly`, `/yearly`, `/methodanalysis`, `/method30`, `/method90`, `/remindtest`
 - Telegram Web Apps for check-in, achievements/history, leaderboard, and method analysis
+- Traditional Chinese, Simplified Chinese, and English Bot and Web App interfaces
 - Web App form for:
   - multi-select practice methods
   - reflection note
@@ -48,6 +49,7 @@ psql "$DATABASE_URL" -f migrations/008_fix_sanfu_badge_description.sql
 psql "$DATABASE_URL" -f migrations/009_add_songjing_method.sql
 psql "$DATABASE_URL" -f migrations/010_telegram_group_operations.sql
 psql "$DATABASE_URL" -f migrations/011_backfill_2026_sanfu_badge.sql
+psql "$DATABASE_URL" -f migrations/012_multilingual_experience.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -72,6 +74,7 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/009_add_songjing_method.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/011_backfill_2026_sanfu_badge.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/012_multilingual_experience.sql
 ```
 
 Migration 011 idempotently awards the 2026 `夏練三伏` badge to users who checked in on all 40 days from July 15 through August 23. The service also reconciles the latest completed Sanfu period at startup and daily at 00:10 Asia/Taipei.
@@ -354,6 +357,7 @@ The following commands are registered in Telegram's command menu (set via `setMy
 | `/method90` | 最近 90 天功法分析 |
 | `/remind` | 設定每日提醒時間 / 時區 / 開關 |
 | `/remindtest` | 送出一則提醒測試訊息 |
+| `/language` | 切換繁體中文、簡體中文或英文介面 |
 
 ## Telegram admin / dashboard behavior
 

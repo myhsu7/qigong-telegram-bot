@@ -1,5 +1,6 @@
 import { db } from '../db';
-import { getMethodTaxonomy } from './taxonomy';
+import { getLocalizedMethodName, getMethodTaxonomy } from './taxonomy';
+import { Locale, methodName } from '../i18n';
 
 export interface MethodMixItem {
     methodId: number;
@@ -90,7 +91,8 @@ const buildMethodMixItems = (
 const buildMethodMixResult = async (
     periodDays: number,
     totalCheckinDays: number,
-    selectionRows: MethodSelectionRow[]
+    selectionRows: MethodSelectionRow[],
+    locale: Locale = 'zh_TW'
 ): Promise<MethodMixResult> => {
     const taxonomy = await getMethodTaxonomy();
     const leafCounts = new Map<number, { methodId: number; methodCode: string; methodName: string; matchedDays: number }>();
@@ -117,7 +119,7 @@ const buildMethodMixResult = async (
         const existingGroup = groupCounts.get(groupedRow.id) || {
             methodId: groupedRow.id,
             methodCode: groupedRow.code,
-            methodName: groupedRow.nameZh,
+            methodName: getLocalizedMethodName(groupedRow, locale),
             matchedDays: 0
         };
         existingGroup.matchedDays += 1;
@@ -141,7 +143,7 @@ const buildMethodMixResult = async (
     };
 };
 
-const getMethodSelectionRows = async (periodDays: number, telegramUserId?: number): Promise<MethodSelectionRow[]> => {
+const getMethodSelectionRows = async (periodDays: number, telegramUserId?: number, locale: Locale = 'zh_TW'): Promise<MethodSelectionRow[]> => {
     const params: Array<number> = [periodDays];
     const userFilter = typeof telegramUserId === 'number' ? 'AND l.telegram_user_id = $2' : '';
     if (typeof telegramUserId === 'number') {
@@ -152,7 +154,9 @@ const getMethodSelectionRows = async (periodDays: number, telegramUserId?: numbe
         `SELECT l.id AS checkin_log_id,
                 pm.id AS method_id,
                 pm.code AS method_code,
-                pm.name_zh AS method_name
+                 pm.name_zh,
+                 pm.name_zh_cn,
+                 pm.name_en
          FROM telegram_checkin_logs l
          JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
          JOIN practice_methods pm ON pm.id = s.practice_method_id
@@ -166,11 +170,11 @@ const getMethodSelectionRows = async (periodDays: number, telegramUserId?: numbe
         checkinLogId: Number(row.checkin_log_id),
         methodId: Number(row.method_id),
         methodCode: row.method_code,
-        methodName: row.method_name
+        methodName: methodName({ nameZh: row.name_zh, nameZhCn: row.name_zh_cn, nameEn: row.name_en }, locale)
     }));
 };
 
-export const getUserPracticeJournal = async (telegramUserId: number, limit = 12): Promise<UserPracticeJournalEntry[]> => {
+export const getUserPracticeJournal = async (telegramUserId: number, limit = 12, locale: Locale = 'zh_TW'): Promise<UserPracticeJournalEntry[]> => {
     const taxonomy = await getMethodTaxonomy();
     const { rows } = await db.query(
         `SELECT l.id,
@@ -204,7 +208,7 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12)
         methodIds.forEach((methodId: number) => {
             const groupedMethod = taxonomy.parentByLeafId.get(methodId) || taxonomy.rowById.get(methodId);
             if (groupedMethod) {
-                groupedMethodNames.set(groupedMethod.id, groupedMethod.nameZh);
+                groupedMethodNames.set(groupedMethod.id, getLocalizedMethodName(groupedMethod, locale));
             }
         });
 
@@ -212,9 +216,10 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12)
             id: Number(row.id),
             date: row.checkin_date,
             groupedMethods: Array.from(groupedMethodNames.values()),
-            leafMethods: Array.isArray(row.leaf_method_names)
-                ? row.leaf_method_names.filter((name: string | null) => typeof name === 'string')
-                : [],
+            leafMethods: methodIds.flatMap((methodId: number) => {
+                const method = taxonomy.rowById.get(methodId);
+                return method ? [getLocalizedMethodName(method, locale)] : [];
+            }),
             reflectionNote: row.reflection_note || '',
             bodyFeelingNote: row.body_feeling_note || ''
         };
@@ -294,7 +299,7 @@ export const getCommunityMethodMix = async (periodDays: number): Promise<MethodM
     return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays));
 };
 
-export const getUserMethodMix = async (telegramUserId: number, periodDays: number): Promise<MethodMixResult> => {
+export const getUserMethodMix = async (telegramUserId: number, periodDays: number, locale: Locale = 'zh_TW'): Promise<MethodMixResult> => {
     const totalDaysQuery = `
         SELECT COUNT(*) AS total_checkin_days
         FROM telegram_checkin_logs
@@ -304,37 +309,41 @@ export const getUserMethodMix = async (telegramUserId: number, periodDays: numbe
     const totalDaysRes = await db.query(totalDaysQuery, [telegramUserId, periodDays]);
     const totalCheckinDays = parseInt(totalDaysRes.rows[0]?.total_checkin_days || '0', 10);
 
-    return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays, telegramUserId));
+    return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays, telegramUserId, locale), locale);
 };
 
-export const buildMethodReview = (result: MethodMixResult) => {
+export const buildMethodReview = (result: MethodMixResult, locale: Locale = 'zh_TW') => {
     const primaryMethods = result.groupMethods.length > 0 ? result.groupMethods : result.leafMethods;
 
     if (result.totalCheckinDays === 0 || primaryMethods.length === 0) {
-        return `最近 ${result.periodDays} 天尚無足夠功法打卡資料。`;
+        return locale === 'en' ? `There is not enough practice data for the last ${result.periodDays} days.` : locale === 'zh_CN' ? `最近 ${result.periodDays} 天尚无足够功法打卡数据。` : `最近 ${result.periodDays} 天尚無足夠功法打卡資料。`;
     }
 
     const topMethod = primaryMethods[0];
-    return topMethod.compositionRatio >= 0.6
-        ? `你最近以「${topMethod.methodName}」為主，練功重心很明確，節奏穩定。`
-        : '你最近的功法分布相當均衡，整體配置很不錯。';
+    if (locale === 'en') return topMethod.compositionRatio >= 0.6
+        ? `${topMethod.methodName} has been your main focus recently, showing a clear and steady practice rhythm.`
+        : 'Your recent practice mix is well balanced. Keep building on this steady rhythm.';
+    if (locale === 'zh_CN') return topMethod.compositionRatio >= 0.6
+        ? `你最近以“${topMethod.methodName}”为主，练功重心很明确，节奏稳定。`
+        : '你最近的功法分布相当均衡，整体配置很不错。';
+    return topMethod.compositionRatio >= 0.6 ? `你最近以「${topMethod.methodName}」為主，練功重心很明確，節奏穩定。` : '你最近的功法分布相當均衡，整體配置很不錯。';
 };
 
-export const buildMethodMixMessage = (result: MethodMixResult, reviewText = buildMethodReview(result)) => {
+export const buildMethodMixMessage = (result: MethodMixResult, reviewText?: string, locale: Locale = 'zh_TW') => {
+    const review = reviewText || buildMethodReview(result, locale);
     const primaryMethods = result.groupMethods.length > 0 ? result.groupMethods : result.leafMethods;
 
     if (result.totalCheckinDays === 0 || primaryMethods.length === 0) {
-        return `📈 最近 ${result.periodDays} 天尚無足夠功法打卡資料。`;
+        return locale === 'en' ? `📈 There is not enough practice data for the last ${result.periodDays} days.` : locale === 'zh_CN' ? `📈 最近 ${result.periodDays} 天尚无足够功法打卡数据。` : `📈 最近 ${result.periodDays} 天尚無足夠功法打卡資料。`;
     }
 
-    let msg = `📈 你的功法分析（最近 ${result.periodDays} 天）\n\n`;
-    msg += `🧘 主要修練分組：\n`;
+    let msg = locale === 'en' ? `📈 Your practice analysis (last ${result.periodDays} days)\n\n🧘 Main practices:\n` : locale === 'zh_CN' ? `📈 你的功法分析（最近 ${result.periodDays} 天）\n\n🧘 主要练功分组：\n` : `📈 你的功法分析（最近 ${result.periodDays} 天）\n\n🧘 主要修練分組：\n`;
     primaryMethods.slice(0, 3).forEach((method, index) => {
-        msg += `${index + 1}. ${method.methodName}：${(method.compositionRatio * 100).toFixed(1)}%（${method.matchedDays} 天）\n`;
+        msg += `${index + 1}. ${method.methodName}: ${(method.compositionRatio * 100).toFixed(1)}% (${method.matchedDays} ${locale === 'en' ? 'days' : '天'})\n`;
     });
 
-    msg += `\n💡 小點評：\n`;
-    msg += reviewText;
+    msg += `\n${locale === 'en' ? '💡 Guidance:' : locale === 'zh_CN' ? '💡 小点评：' : '💡 小點評：'}\n`;
+    msg += review;
 
     return msg.trim();
 };

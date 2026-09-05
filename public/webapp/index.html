@@ -29,32 +29,35 @@
     .status { margin-top: 12px; font-size: 14px; }
     .error { color: #b91c1c; }
     .success { color: #166534; }
+    .language-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .language-select { width: auto; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #1f2937; padding: 8px 10px; font-size: 14px; }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="language-row"><select id="languageSelect" class="language-select" aria-label="語言"><option value="zh_TW">繁體中文</option><option value="zh_CN">简体中文</option><option value="en">English</option></select></div>
     <div class="card">
-      <h1>今日打卡</h1>
-      <p class="muted">請勾選今天練習的功法，並可選填心得與身體感受。</p>
-      <div class="hint" id="todayStatus">正在載入今日打卡資料...</div>
+      <h1 data-i18n="heading">今日打卡</h1>
+      <p class="muted" data-i18n="intro">請勾選今天練習的功法，並可選填心得與身體感受。</p>
+      <div class="hint" id="todayStatus"></div>
     </div>
 
     <div class="card">
-      <h2>今日功法（可複選）</h2>
+      <h2 data-i18n="methodsHeading">今日功法（可複選）</h2>
       <div id="methodsContainer"></div>
     </div>
 
     <div class="card">
-      <h2>練功心得（選填）</h2>
-      <textarea id="reflectionNote" placeholder="今天練功的心得..."></textarea>
+      <h2 data-i18n="reflectionHeading">練功心得（選填）</h2>
+      <textarea id="reflectionNote" maxlength="1000"></textarea>
     </div>
 
     <div class="card">
-      <h2>身體感受（選填）</h2>
-      <textarea id="bodyFeelingNote" placeholder="今天身體有什麼感受..."></textarea>
+      <h2 data-i18n="feelingHeading">身體感受（選填）</h2>
+      <textarea id="bodyFeelingNote" maxlength="1000"></textarea>
     </div>
 
-    <button type="button" id="submitButton">完成打卡</button>
+    <button type="button" id="submitButton" data-i18n="submit">完成打卡</button>
     <div id="submitStatus" class="status"></div>
   </div>
 
@@ -65,40 +68,78 @@
       tg.expand();
     }
 
+    const translations = {
+      zh_TW: {
+        title: '氣功打卡', language: '語言', heading: '今日打卡', intro: '請勾選今天練習的功法，並可選填心得與身體感受。', loadingToday: '正在載入今日打卡資料...', methodsHeading: '今日功法（可複選）', reflectionHeading: '練功心得（選填）', reflectionPlaceholder: '今天練功的心得...', feelingHeading: '身體感受（選填）', feelingPlaceholder: '今天身體有什麼感受...', submit: '完成打卡', selectAllChildren: '勾選即全選子招式', authError: '尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。', requestFailed: '請求失敗', methodsLoadFailed: '功法列表載入失敗：', todayLoadFailed: '今日打卡資料載入失敗：', alreadyCheckedIn: '你今天已打卡，可修改今日內容後重新送出。', notCheckedIn: '今天尚未打卡，請完成以下內容後送出。', loadFailed: '載入失敗：', selectMethod: '請至少勾選一個功法。', saving: '正在儲存打卡資料...', streak: (n) => `連續 ${n} 天`, total: (n) => `總計 ${n} 天`, unlocked: '解鎖：', success: '打卡成功：', saved: '今天的打卡內容已儲存，你可以再次修改後重新送出。', saveFailed: '儲存失敗：'
+      },
+      zh_CN: {
+        title: '气功打卡', language: '语言', heading: '今日打卡', intro: '请选择今天练习的功法，并可选填心得与身体感受。', loadingToday: '正在加载今日打卡数据...', methodsHeading: '今日功法（可多选）', reflectionHeading: '练功心得（选填）', reflectionPlaceholder: '今天练功的心得...', feelingHeading: '身体感受（选填）', feelingPlaceholder: '今天身体有什么感受...', submit: '完成打卡', selectAllChildren: '勾选即全选子招式', authError: '尚未取得 Telegram 验证信息，请从 Telegram App 内重新打开打卡页。', requestFailed: '请求失败', methodsLoadFailed: '功法列表加载失败：', todayLoadFailed: '今日打卡数据加载失败：', alreadyCheckedIn: '你今天已打卡，可修改今日内容后重新提交。', notCheckedIn: '今天尚未打卡，请完成以下内容后提交。', loadFailed: '加载失败：', selectMethod: '请至少选择一个功法。', saving: '正在保存打卡数据...', streak: (n) => `连续 ${n} 天`, total: (n) => `总计 ${n} 天`, unlocked: '解锁：', success: '打卡成功：', saved: '今天的打卡内容已保存，你可以再次修改后重新提交。', saveFailed: '保存失败：'
+      },
+      en: {
+        title: 'Qigong Check-in', language: 'Language', heading: 'Today’s Check-in', intro: 'Select the methods you practiced today. You may also add reflections and physical sensations.', loadingToday: 'Loading today’s check-in...', methodsHeading: 'Today’s Methods (select all that apply)', reflectionHeading: 'Practice Reflection (optional)', reflectionPlaceholder: 'What did you notice in today’s practice?', feelingHeading: 'Physical Sensations (optional)', feelingPlaceholder: 'How did your body feel today?', submit: 'Complete Check-in', selectAllChildren: 'Selects all child forms', authError: 'Telegram authentication is unavailable. Please reopen this page in the Telegram app.', requestFailed: 'Request failed', methodsLoadFailed: 'Could not load practice methods: ', todayLoadFailed: 'Could not load today’s check-in: ', alreadyCheckedIn: 'You have checked in today. You can edit the details and submit again.', notCheckedIn: 'You have not checked in today. Complete the details below to continue.', loadFailed: 'Could not load data: ', selectMethod: 'Select at least one practice method.', saving: 'Saving your check-in...', streak: (n) => `${n}-day streak`, total: (n) => `${n} days total`, unlocked: 'Unlocked: ', success: 'Check-in successful: ', saved: 'Today’s check-in has been saved. You can edit and submit it again.', saveFailed: 'Could not save: '
+      }
+    };
+    const localeKey = 'qigong_telegram_locale';
+    const telegramLanguage = tg?.initDataUnsafe?.user?.language_code || '';
+    const mapLocale = (code) => ['zh-hans', 'zh-cn', 'zh-sg'].includes(String(code).toLowerCase()) ? 'zh_CN' : (/^en(?:-|$)/i.test(String(code)) ? 'en' : 'zh_TW');
+    const storedLocale = localStorage.getItem(localeKey);
+    let locale = translations[storedLocale] ? storedLocale : mapLocale(telegramLanguage);
+    let t = translations[locale];
+
     const methodsContainer = document.getElementById('methodsContainer');
     const reflectionNote = document.getElementById('reflectionNote');
     const bodyFeelingNote = document.getElementById('bodyFeelingNote');
     const submitButton = document.getElementById('submitButton');
     const submitStatus = document.getElementById('submitStatus');
     const todayStatus = document.getElementById('todayStatus');
+    const languageSelect = document.getElementById('languageSelect');
     let practiceMethods = [];
     let selectedMethodIds = new Set();
     let expandedMethodIds = new Set();
+    let profileReady = false;
 
     const getInitData = () => window.Telegram?.WebApp?.initData || '';
+    const localizedUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}locale=${encodeURIComponent(locale)}`;
+    const getMethodName = (method) => (locale === 'en' ? method.nameEn : locale === 'zh_CN' ? method.nameZhCn : method.nameZh) || method.nameZh || '';
+
+    const applyTranslations = () => {
+      t = translations[locale];
+      document.documentElement.lang = locale === 'en' ? 'en' : locale === 'zh_CN' ? 'zh-Hans' : 'zh-Hant';
+      document.title = t.title;
+      document.querySelectorAll('[data-i18n]').forEach((element) => { element.textContent = t[element.dataset.i18n]; });
+      languageSelect.value = locale;
+      languageSelect.setAttribute('aria-label', t.language);
+      reflectionNote.placeholder = t.reflectionPlaceholder;
+      bodyFeelingNote.placeholder = t.feelingPlaceholder;
+    };
 
     const setStatus = (el, message, className = '') => {
       el.textContent = message;
       el.className = `status ${className}`.trim();
     };
 
-    const apiFetch = async (url, options = {}) => {
+    const apiFetch = async (url, options = {}, includeLocale = true) => {
       const initData = getInitData();
       if (!initData) {
-        throw new Error('尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。');
+        throw new Error(t.authError);
       }
       const headers = new Headers(options.headers || {});
       headers.set('x-telegram-init-data', initData);
       if (!headers.has('Content-Type') && options.method && options.method !== 'GET') {
         headers.set('Content-Type', 'application/json');
       }
-      const res = await fetch(url, { ...options, headers });
+      const res = await fetch(includeLocale ? localizedUrl(url) : url, { ...options, headers });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(body.error || 'Request failed');
+        const body = await res.json().catch(() => ({ error: t.requestFailed }));
+        throw new Error(body.error || t.requestFailed);
       }
-      return res.json();
+      return res.status === 204 ? null : res.json();
     };
+
+    const persistProfileLocale = (nextLocale) => apiFetch('/telegram/api/webapp/profile/language', {
+      method: 'PATCH',
+      body: JSON.stringify({ locale: nextLocale })
+    }, false);
 
     const normalizeSelectedIds = (methods, selectedIds) => {
       const normalized = new Set();
@@ -171,9 +212,13 @@
         checkbox.indeterminate = state.indeterminate;
 
         const textWrap = document.createElement('div');
-        textWrap.innerHTML = method.children && method.children.length > 0
-          ? `${method.nameZh} <span class="method-hint">勾選即全選子招式</span>`
-          : method.nameZh;
+        textWrap.appendChild(document.createTextNode(getMethodName(method)));
+        if (method.children && method.children.length > 0) {
+          const hint = document.createElement('span');
+          hint.className = 'method-hint';
+          hint.textContent = ` ${t.selectAllChildren}`;
+          textWrap.appendChild(hint);
+        }
 
         label.appendChild(checkbox);
         label.appendChild(textWrap);
@@ -198,7 +243,7 @@
             childCheckbox.checked = selectedMethodIds.has(child.id);
 
             const childText = document.createElement('span');
-            childText.textContent = child.nameZh;
+            childText.textContent = getMethodName(child);
 
             childLabel.appendChild(childCheckbox);
             childLabel.appendChild(childText);
@@ -283,19 +328,23 @@
     });
 
     const load = async () => {
+      if (!profileReady && getInitData()) return;
+      todayStatus.textContent = t.loadingToday;
+      todayStatus.className = 'hint';
+      submitStatus.textContent = '';
       try {
         if (!getInitData()) {
-          todayStatus.textContent = '尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。';
+          todayStatus.textContent = t.authError;
           todayStatus.className = 'hint error';
           return;
         }
 
         const methodsResp = await apiFetch('/telegram/api/webapp/practice-methods').catch((error) => {
-          throw new Error(`功法列表載入失敗：${error.message}`);
+          throw new Error(`${t.methodsLoadFailed}${error.message}`);
         });
 
         const todayResp = await apiFetch('/telegram/api/webapp/checkin/today').catch((error) => {
-          throw new Error(`今日打卡資料載入失敗：${error.message}`);
+          throw new Error(`${t.todayLoadFailed}${error.message}`);
         });
 
         renderMethods(methodsResp.methods, todayResp.selectedMethodIds);
@@ -303,10 +352,10 @@
         bodyFeelingNote.value = todayResp.bodyFeelingNote || '';
 
         todayStatus.textContent = todayResp.alreadyCheckedIn
-          ? '你今天已打卡，可修改今日內容後重新送出。'
-          : '今天尚未打卡，請完成以下內容後送出。';
+          ? t.alreadyCheckedIn
+          : t.notCheckedIn;
       } catch (error) {
-        todayStatus.textContent = `載入失敗：${error.message}`;
+        todayStatus.textContent = `${t.loadFailed}${error.message}`;
         todayStatus.className = 'hint error';
       }
     };
@@ -314,12 +363,12 @@
     submitButton.addEventListener('click', async () => {
       const methodIds = getSelectedMethodIds();
       if (methodIds.length === 0) {
-        setStatus(submitStatus, '請至少勾選一個功法。', 'error');
+        setStatus(submitStatus, t.selectMethod, 'error');
         return;
       }
 
       submitButton.disabled = true;
-      setStatus(submitStatus, '正在儲存打卡資料...');
+      setStatus(submitStatus, t.saving);
 
       try {
         const result = await apiFetch('/telegram/api/webapp/checkin', {
@@ -331,12 +380,12 @@
           })
         });
 
-        const streakText = result.stats ? `｜連續 ${result.stats.currentStreak} 天｜總計 ${result.stats.totalCheckins} 天` : '';
+        const streakText = result.stats ? ` | ${t.streak(result.stats.currentStreak)} | ${t.total(result.stats.totalCheckins)}` : '';
         const badgeText = result.unlockedBadges && result.unlockedBadges.length > 0
-          ? `｜解鎖：${result.unlockedBadges.map(b => `${b.emoji} ${b.name}`).join('、')}`
+          ? ` | ${t.unlocked}${result.unlockedBadges.map(b => `${b.emoji} ${b.name}`).join(locale === 'en' ? ', ' : '、')}`
           : '';
-        setStatus(submitStatus, `打卡成功：${result.selectedMethods.join('、')}${streakText}${badgeText}`, 'success');
-        todayStatus.textContent = '今天的打卡內容已儲存，你可以再次修改後重新送出。';
+        setStatus(submitStatus, `${t.success}${result.selectedMethods.join(locale === 'en' ? ', ' : '、')}${streakText}${badgeText}`, 'success');
+        todayStatus.textContent = t.saved;
         if (tg?.HapticFeedback) {
           tg.HapticFeedback.notificationOccurred('success');
         }
@@ -346,13 +395,53 @@
           return;
         }
       } catch (error) {
-        setStatus(submitStatus, `儲存失敗：${error.message}`, 'error');
+        setStatus(submitStatus, `${t.saveFailed}${error.message}`, 'error');
       } finally {
         submitButton.disabled = false;
       }
     });
 
-    load();
+    languageSelect.addEventListener('change', async () => {
+      const nextLocale = languageSelect.value;
+      languageSelect.disabled = true;
+      try {
+        await persistProfileLocale(nextLocale);
+        locale = nextLocale;
+        localStorage.setItem(localeKey, locale);
+        applyTranslations();
+        redrawMethods();
+        await load();
+      } catch (error) {
+        console.error('Failed to persist WebApp locale', error);
+        applyTranslations();
+      } finally {
+        languageSelect.disabled = false;
+      }
+    });
+
+    const initialize = async () => {
+      applyTranslations();
+      languageSelect.disabled = true;
+      submitButton.disabled = true;
+      try {
+        if (getInitData()) {
+          const profile = await apiFetch('/telegram/api/webapp/profile', {}, false);
+          if (translations[profile.locale]) locale = profile.locale;
+          localStorage.setItem(localeKey, locale);
+          applyTranslations();
+        }
+        profileReady = true;
+        await load();
+      } catch (error) {
+        console.error('Failed to load WebApp locale profile', error);
+        profileReady = true;
+        await load();
+      } finally {
+        languageSelect.disabled = false;
+        submitButton.disabled = false;
+      }
+    };
+    initialize();
   </script>
 </body>
 </html>

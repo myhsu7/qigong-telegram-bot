@@ -1,6 +1,7 @@
 import moment from 'moment-timezone';
 import { db } from '../db';
 import { getUserBadges } from './badges';
+import { Locale } from '../i18n';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -16,11 +17,16 @@ export interface UserStats {
     lastCheckinDate: string | null;
 }
 
-export const getLevelTitle = (totalCheckins: number) => {
-    if (totalCheckins >= 200) return '化境 (Level 4)';
-    if (totalCheckins >= 90) return '結丹 (Level 3)';
-    if (totalCheckins >= 30) return '築基 (Level 2)';
-    return '練氣 (Level 1)';
+export const getLevelTitle = (totalCheckins: number, locale: Locale = 'zh_TW') => {
+    const titles = locale === 'en'
+        ? ['Qi Cultivation (Level 1)', 'Foundation Building (Level 2)', 'Inner Formation (Level 3)', 'Transformation (Level 4)']
+        : locale === 'zh_CN'
+            ? ['练气 (Level 1)', '筑基 (Level 2)', '结丹 (Level 3)', '化境 (Level 4)']
+            : ['練氣 (Level 1)', '築基 (Level 2)', '結丹 (Level 3)', '化境 (Level 4)'];
+    if (totalCheckins >= 200) return titles[3];
+    if (totalCheckins >= 90) return titles[2];
+    if (totalCheckins >= 30) return titles[1];
+    return titles[0];
 };
 
 interface PeriodRange {
@@ -532,7 +538,15 @@ export const getAdminPeriodStreaks = async (
     }));
 };
 
-export const buildUserStatsMessage = (stats: UserStats) => {
+export const buildUserStatsMessage = (stats: UserStats, locale: Locale = 'zh_TW') => {
+    if (locale === 'en') {
+        if (stats.totalCheckins === 0) return 'You have no check-ins yet. Use /checkin to begin today’s practice!';
+        return `📊 Your practice stats\n\n🔥 Current streak: ${stats.currentStreak} days\n📈 Longest streak: ${stats.longestStreak} days\n⭐ Total check-ins: ${stats.totalCheckins} days\n🗓 Most recent: ${stats.lastCheckinDate}`;
+    }
+    if (locale === 'zh_CN') {
+        if (stats.totalCheckins === 0) return '你目前还没有打卡记录，先用 /checkin 开始今天的练功吧！';
+        return `📊 你的练功统计\n\n🔥 目前连续打卡：${stats.currentStreak} 天\n📈 最长连续打卡：${stats.longestStreak} 天\n⭐ 总打卡天数：${stats.totalCheckins} 天\n🗓 最近打卡日期：${stats.lastCheckinDate}`;
+    }
     if (stats.totalCheckins === 0) {
         return '你目前還沒有打卡紀錄，先用 /checkin 開始今天的練功吧！';
     }
@@ -547,14 +561,14 @@ export const buildUserStatsMessage = (stats: UserStats) => {
     ].join('\n');
 };
 
-export const buildEnhancedUserStatsMessage = async (telegramUserId: number, stats: UserStats) => {
+export const buildEnhancedUserStatsMessage = async (telegramUserId: number, stats: UserStats, locale: Locale = 'zh_TW') => {
     if (stats.totalCheckins === 0) {
-        return '你目前還沒有打卡紀錄，先用 /checkin 開始今天的練功吧！';
+        return buildUserStatsMessage(stats, locale);
     }
 
-    const badges = await getUserBadges(telegramUserId);
-    const levelTitle = getLevelTitle(stats.totalCheckins);
-    let trophy = '目前還沒有勳章，快去打卡解鎖吧！';
+    const badges = await getUserBadges(telegramUserId, locale);
+    const levelTitle = getLevelTitle(stats.totalCheckins, locale);
+    let trophy = locale === 'en' ? 'No badges yet. Keep checking in to unlock one!' : locale === 'zh_CN' ? '目前还没有勋章，快去打卡解锁吧！' : '目前還沒有勳章，快去打卡解鎖吧！';
 
     if (badges.length > 0) {
         const grouped = new Map<string, { emoji: string; years: number[]; count: number }>();
@@ -573,6 +587,16 @@ export const buildEnhancedUserStatsMessage = async (telegramUserId: number, stat
         }).join('\n');
     }
 
+    if (locale === 'en') return [
+        '📊 Your practice progress', '', `【Current level】${levelTitle}`,
+        `🔥 Current streak: ${stats.currentStreak} days`, `📈 Longest streak: ${stats.longestStreak} days`,
+        `⭐ Total check-ins: ${stats.totalCheckins} days`, `🗓 Most recent: ${stats.lastCheckinDate}`, '', '🏆 Your badges:', trophy
+    ].join('\n');
+    if (locale === 'zh_CN') return [
+        '📊 你的练功数据', '', `【当前境界】${levelTitle}`,
+        `🔥 目前连续打卡：${stats.currentStreak} 天`, `📈 最长连续打卡：${stats.longestStreak} 天`,
+        `⭐ 总打卡天数：${stats.totalCheckins} 天`, `🗓 最近打卡日期：${stats.lastCheckinDate}`, '', '🏆 你的荣誉勋章：', trophy
+    ].join('\n');
     return [
         '📊 你的修練數據',
         '',
@@ -587,13 +611,13 @@ export const buildEnhancedUserStatsMessage = async (telegramUserId: number, stat
     ].join('\n');
 };
 
-export const buildBadgesMessage = async (telegramUserId: number) => {
-    const badges = await getUserBadges(telegramUserId);
+export const buildBadgesMessage = async (telegramUserId: number, locale: Locale = 'zh_TW') => {
+    const badges = await getUserBadges(telegramUserId, locale);
     if (badges.length === 0) {
-        return '🏆 你目前還沒有解鎖任何勳章，持續打卡很快就會有第一枚成就！';
+        return locale === 'en' ? '🏆 You have not unlocked any badges yet. Keep checking in!' : locale === 'zh_CN' ? '🏆 你目前还没有解锁任何勋章，持续打卡很快就会有第一枚成就！' : '🏆 你目前還沒有解鎖任何勳章，持續打卡很快就會有第一枚成就！';
     }
 
-    let msg = '🏆 你的成就勳章\n\n';
+    let msg = locale === 'en' ? '🏆 Your achievement badges\n\n' : locale === 'zh_CN' ? '🏆 你的成就勋章\n\n' : '🏆 你的成就勳章\n\n';
     badges.forEach((badge, index) => {
         const yearText = badge.earned_year && badge.earned_year !== 0 ? `（${badge.earned_year}）` : '';
         msg += `${index + 1}. ${badge.emoji || '🏅'} ${badge.name}${yearText}\n   ${badge.description || ''}\n`;
@@ -601,29 +625,34 @@ export const buildBadgesMessage = async (telegramUserId: number) => {
     return msg.trim();
 };
 
-export const buildLeaderboardMessage = async (period: LeaderboardPeriod) => {
-    const titles: Record<LeaderboardPeriod, string> = {
+export const buildLeaderboardMessage = async (period: LeaderboardPeriod, locale: Locale = 'zh_TW') => {
+    const titleSets: Record<Locale, Record<LeaderboardPeriod, string>> = {
+        en: { week: '🏆 Weekly Leaderboard', month: '🏆 Monthly Leaderboard', quarter: '🏆 Quarterly Leaderboard', year: '🏆 Yearly Leaderboard', all: '🏆 All-Time Leaderboard' },
+        zh_CN: { week: '🏆 周排行榜', month: '🏆 月排行榜', quarter: '🏆 季排行榜', year: '🏆 年排行榜', all: '🏆 总排行榜' },
+        zh_TW: {
         week: '🏆 週排行榜',
         month: '🏆 月排行榜',
         quarter: '🏆 季排行榜',
         year: '🏆 年排行榜',
-        all: '🏆 總排行榜'
+        all: '🏆 總排行榜' }
     };
+    const titles = titleSets[locale];
 
     const { totals, streaks } = await getLeaderboard(period);
 
     if (totals.length === 0 && streaks.length === 0) {
-        return `${titles[period]}\n\n目前還沒有打卡紀錄。`;
+        return `${titles[period]}\n\n${locale === 'en' ? 'No check-ins yet.' : locale === 'zh_CN' ? '目前还没有打卡记录。' : '目前還沒有打卡紀錄。'}`;
     }
 
-    let msg = `${titles[period]}\n\n⭐ 總打卡天數 Top 10\n`;
+    const day = locale === 'en' ? ' days' : '天';
+    let msg = `${titles[period]}\n\n${locale === 'en' ? '⭐ Total Check-in Days Top 10' : locale === 'zh_CN' ? '⭐ 总打卡天数 Top 10' : '⭐ 總打卡天數 Top 10'}\n`;
     totals.forEach((row, i) => {
-        msg += `${i + 1}. ${row.displayName}（${row.totalDays}天）\n`;
+        msg += `${i + 1}. ${row.displayName} (${row.totalDays}${day})\n`;
     });
 
-    msg += '\n🔥 最長連續打卡 Top 10\n';
+    msg += `\n${locale === 'en' ? '🔥 Longest Streak Top 10' : locale === 'zh_CN' ? '🔥 最长连续打卡 Top 10' : '🔥 最長連續打卡 Top 10'}\n`;
     streaks.forEach((row, i) => {
-        msg += `${i + 1}. ${row.displayName}（連續${row.maxStreak}天）\n`;
+        msg += `${i + 1}. ${row.displayName} (${locale === 'en' ? `${row.maxStreak} consecutive days` : `${locale === 'zh_CN' ? '连续' : '連續'}${row.maxStreak}天`})\n`;
     });
 
     return msg.trim();

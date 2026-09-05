@@ -1,16 +1,17 @@
 import { env } from '../config/env';
 import { db } from '../db';
 import { MethodMixResult } from './methodAnalysis';
+import { Locale } from '../i18n';
 
 const REVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 const reviewCache = new Map<string, { review: string; expiresAt: number }>();
 const pendingReviews = new Map<string, Promise<string>>();
 
-const buildCacheKey = (telegramUserId: number, analysis: MethodMixResult) => {
+const buildCacheKey = (telegramUserId: number, analysis: MethodMixResult, locale: Locale) => {
     const methods = (analysis.groupMethods.length > 0 ? analysis.groupMethods : analysis.leafMethods)
         .map((method) => `${method.methodCode}:${method.matchedDays}:${method.compositionRatio.toFixed(6)}`)
         .join('|');
-    return `${telegramUserId}:${analysis.periodDays}:${analysis.totalCheckinDays}:${analysis.totalMatchedMethodDays}:${methods}`;
+    return `${telegramUserId}:${locale}:${analysis.periodDays}:${analysis.totalCheckinDays}:${analysis.totalMatchedMethodDays}:${methods}`;
 };
 
 const trimTo200Chars = (text: string) => {
@@ -134,14 +135,15 @@ const generateReview = async (
 export const generateMethodReviewWithLlm = async (
     analysis: MethodMixResult,
     fallbackText: string,
-    telegramUserId: number
+    telegramUserId: number,
+    locale: Locale = 'zh_TW'
 ) => {
     const primaryMethods = analysis.groupMethods.length > 0 ? analysis.groupMethods : analysis.leafMethods;
-    if (!env.localLlmEnabled || !env.localLlmBaseUrl || !env.localLlmModel || primaryMethods.length === 0) {
+    if (locale !== 'zh_TW' || !env.localLlmEnabled || !env.localLlmBaseUrl || !env.localLlmModel || primaryMethods.length === 0) {
         return fallbackText;
     }
 
-    const cacheKey = buildCacheKey(telegramUserId, analysis);
+    const cacheKey = buildCacheKey(telegramUserId, analysis, locale);
     const cached = reviewCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.review;
     if (cached) reviewCache.delete(cacheKey);

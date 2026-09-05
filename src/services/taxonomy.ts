@@ -1,9 +1,11 @@
 import { db } from '../db';
+import { Locale, methodName } from '../i18n';
 
 export interface PracticeMethodRow {
     id: number;
     code: string;
     nameZh: string;
+    nameZhCn: string | null;
     nameEn: string | null;
     estimatedMinutes: number | null;
     sortOrder: number;
@@ -28,6 +30,7 @@ const toPracticeMethodRow = (row: {
     id: number;
     code: string;
     name_zh: string;
+    name_zh_cn: string | null;
     name_en: string | null;
     estimated_minutes: number | null;
     sort_order: number;
@@ -37,6 +40,7 @@ const toPracticeMethodRow = (row: {
     id: row.id,
     code: row.code,
     nameZh: row.name_zh,
+    nameZhCn: row.name_zh_cn,
     nameEn: row.name_en,
     estimatedMinutes: row.estimated_minutes,
     sortOrder: row.sort_order,
@@ -46,7 +50,7 @@ const toPracticeMethodRow = (row: {
 
 export const getPracticeMethodRows = async (): Promise<PracticeMethodRow[]> => {
     const { rows } = await db.queryWithRetry(
-        `SELECT id, code, name_zh, name_en, estimated_minutes, sort_order, parent_id, method_type
+        `SELECT id, code, name_zh, name_zh_cn, name_en, estimated_minutes, sort_order, parent_id, method_type
          FROM practice_methods
          WHERE is_active = TRUE
          ORDER BY sort_order ASC, id ASC`
@@ -63,6 +67,7 @@ export const buildPracticeMethodTree = (rows: PracticeMethodRow[]): PracticeMeth
             id: row.id,
             code: row.code,
             nameZh: row.nameZh,
+            nameZhCn: row.nameZhCn,
             nameEn: row.nameEn,
             estimatedMinutes: row.estimatedMinutes,
             parentId: row.parentId,
@@ -161,6 +166,8 @@ export const getGroupedMethodRowsForLeafIds = (leafIds: number[], taxonomy: Meth
     });
 };
 
+export const getLocalizedMethodName = (row: PracticeMethodRow, locale: Locale) => methodName(row, locale);
+
 export interface LeafMethodCount {
     methodId: number;
     methodName: string;
@@ -174,7 +181,8 @@ export interface GroupedMethodCount extends LeafMethodCount {
 
 export const aggregateLeafCountsByGroup = (
     leafCounts: LeafMethodCount[],
-    taxonomy: MethodTaxonomy
+    taxonomy: MethodTaxonomy,
+    locale: Locale = 'zh_TW'
 ): GroupedMethodCount[] => {
     const grouped = new Map<number, GroupedMethodCount>();
 
@@ -192,7 +200,7 @@ export const aggregateLeafCountsByGroup = (
         grouped.set(groupedRow.id, {
             methodId: groupedRow.id,
             methodCode: groupedRow.code,
-            methodName: groupedRow.nameZh,
+            methodName: getLocalizedMethodName(groupedRow, locale),
             matchedDays: item.matchedDays,
             childMethodIds: [item.methodId]
         });

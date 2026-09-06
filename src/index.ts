@@ -37,7 +37,7 @@ app.use('/telegram/admin', requireTailscaleInternal, requireAdminBasicAuth, admi
 
 app.listen(env.port, () => {
     console.log(`[telegram-bot] server listening on port ${env.port}`);
-    console.log(`[telegram-bot] webhook path: /telegram/webhook/${env.telegramWebhookSecret}`);
+    console.log('[telegram-bot] webhook endpoint configured');
     console.log(`[telegram-bot] webapp path: /telegram/webapp/checkin`);
     setupReminderCron();
     setupTelegramGroupReminderCron();

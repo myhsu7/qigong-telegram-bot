@@ -47,9 +47,9 @@
     if (tg) { tg.ready(); tg.expand(); }
     const initData = tg?.initData || '';
     const translations = {
-      zh_TW:{title:'我的功法分析',language:'語言',heading:'🧘 我的功法分析',subtitle:'看見練功節奏，找到穩定精進的方向。',period30:'近 30 天',period90:'近 90 天',loading:'正在整理你的功法資料...',journalEmpty:'最近還沒有心得或身體感受。',reflection:'練功心得',feeling:'身體感受',days:(n)=>`${n} 天`,checkinDays:'打卡天數',noMethods:'這個期間尚無功法資料',totalDays:'總打卡天數',matchedDays:'主功法命中',methodCount:'練習功法數',reviewHeading:'💡 練功點評',noReview:'目前沒有可顯示的點評。',ratioHeading:'功法配比',journalHeading:'📜 最近心得與身體感受',authError:'請從 Telegram App 內開啟功法分析。',loadFailed:'功法分析載入失敗'},
-      zh_CN:{title:'我的功法分析',language:'语言',heading:'🧘 我的功法分析',subtitle:'看见练功节奏，找到稳定精进的方向。',period30:'近 30 天',period90:'近 90 天',loading:'正在整理你的功法数据...',journalEmpty:'最近还没有心得或身体感受。',reflection:'练功心得',feeling:'身体感受',days:(n)=>`${n} 天`,checkinDays:'打卡天数',noMethods:'这个期间尚无功法数据',totalDays:'总打卡天数',matchedDays:'主功法命中',methodCount:'练习功法数',reviewHeading:'💡 练功点评',noReview:'目前没有可显示的点评。',ratioHeading:'功法配比',journalHeading:'📜 最近心得与身体感受',authError:'请从 Telegram App 内打开功法分析。',loadFailed:'功法分析加载失败'},
-      en:{title:'My Method Analysis',language:'Language',heading:'🧘 My Method Analysis',subtitle:'See your practice rhythm and find a steady path forward.',period30:'Last 30 Days',period90:'Last 90 Days',loading:'Analyzing your practice data...',journalEmpty:'No recent reflections or physical sensations.',reflection:'Practice Reflection',feeling:'Physical Sensations',days:(n)=>`${n} ${Number(n) === 1 ? 'day' : 'days'}`,checkinDays:'Check-in Days',noMethods:'No method data for this period',totalDays:'Total Check-in Days',matchedDays:'Primary Method Days',methodCount:'Methods Practiced',reviewHeading:'💡 Practice Review',noReview:'No review is available yet.',ratioHeading:'Method Distribution',journalHeading:'📜 Recent Reflections and Sensations',authError:'Please open Method Analysis in the Telegram app.',loadFailed:'Could not load method analysis'}
+      zh_TW:{title:'我的功法分析',language:'語言',heading:'🧘 我的功法分析',subtitle:'看見練功節奏，找到穩定精進的方向。',period30:'近 30 天',period90:'近 90 天',loading:'正在整理你的功法資料...',journalEmpty:'最近還沒有練功心得與感受。',practiceNote:'練功心得與感受',days:(n)=>`${n} 天`,checkinDays:'打卡天數',noMethods:'這個期間尚無功法資料',totalDays:'總打卡天數',matchedDays:'主功法命中',methodCount:'練習功法數',reviewHeading:'💡 練功點評',noReview:'目前沒有可顯示的點評。',ratioHeading:'功法配比',journalHeading:'📜 最近練功心得與感受',authError:'請從 Telegram App 內開啟功法分析。',loadFailed:'功法分析載入失敗'},
+      zh_CN:{title:'我的功法分析',language:'语言',heading:'🧘 我的功法分析',subtitle:'看见练功节奏，找到稳定精进的方向。',period30:'近 30 天',period90:'近 90 天',loading:'正在整理你的功法数据...',journalEmpty:'最近还没有练功心得与感受。',practiceNote:'练功心得与感受',days:(n)=>`${n} 天`,checkinDays:'打卡天数',noMethods:'这个期间尚无功法数据',totalDays:'总打卡天数',matchedDays:'主功法命中',methodCount:'练习功法数',reviewHeading:'💡 练功点评',noReview:'目前没有可显示的点评。',ratioHeading:'功法配比',journalHeading:'📜 最近练功心得与感受',authError:'请从 Telegram App 内打开功法分析。',loadFailed:'功法分析加载失败'},
+      en:{title:'My Method Analysis',language:'Language',heading:'🧘 My Method Analysis',subtitle:'See your practice rhythm and find a steady path forward.',period30:'Last 30 Days',period90:'Last 90 Days',loading:'Analyzing your practice data...',journalEmpty:'No recent practice reflections and sensations.',practiceNote:'Practice Reflection and Sensations',days:(n)=>`${n} ${Number(n) === 1 ? 'day' : 'days'}`,checkinDays:'Check-in Days',noMethods:'No method data for this period',totalDays:'Total Check-in Days',matchedDays:'Primary Method Days',methodCount:'Methods Practiced',reviewHeading:'💡 Practice Review',noReview:'No review is available yet.',ratioHeading:'Method Distribution',journalHeading:'📜 Recent Practice Reflections and Sensations',authError:'Please open Method Analysis in the Telegram app.',loadFailed:'Could not load method analysis'}
     };
     const localeKey = 'qigong_telegram_locale';
     const mapLocale = (code) => ['zh-hans','zh-cn','zh-sg'].includes(String(code).toLowerCase()) ? 'zh_CN' : (/^en(?:-|$)/i.test(String(code)) ? 'en' : 'zh_TW');
@@ -62,6 +62,12 @@
     let profileReady = false;
     const escapeHtml = (value) => String(value || '')
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const mergeLegacyNotes = (entry) => {
+      const reflection = String(entry.reflectionNote || '').trim();
+      const bodyFeeling = String(entry.bodyFeelingNote || '').trim();
+      if (!reflection || !bodyFeeling) return reflection || bodyFeeling;
+      return `${reflection}\n${bodyFeeling}`;
+    };
 
     const apiFetch = async (url, options = {}, includeLocale = true) => {
       if (!initData) throw new Error(t.authError);
@@ -96,9 +102,9 @@
       if (!entries?.length) return `<div class="state">${t.journalEmpty}</div>`;
       return `<div class="journal-list">${entries.map((entry) => {
         const tags = (entry.groupedMethods || []).map((name) => `<span class="tag">${escapeHtml(name)}</span>`).join('');
-        const reflection = entry.reflectionNote ? `<div class="note"><div class="note-label">${t.reflection}</div>${escapeHtml(entry.reflectionNote)}</div>` : '';
-        const feeling = entry.bodyFeelingNote ? `<div class="note"><div class="note-label">${t.feeling}</div>${escapeHtml(entry.bodyFeelingNote)}</div>` : '';
-        return `<article class="journal"><div class="journal-date">${escapeHtml(entry.date)}</div><div class="tags">${tags}</div>${reflection}${feeling}</article>`;
+        const practiceNote = entry.practiceNote || mergeLegacyNotes(entry);
+        const note = practiceNote ? `<div class="note"><div class="note-label">${t.practiceNote}</div>${escapeHtml(practiceNote)}</div>` : '';
+        return `<article class="journal"><div class="journal-date">${escapeHtml(entry.date)}</div><div class="tags">${tags}</div>${note}</article>`;
       }).join('')}</div>`;
     };
 

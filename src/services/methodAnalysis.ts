@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { getLocalizedMethodName, getMethodTaxonomy } from './taxonomy';
 import { Locale, methodName } from '../i18n';
+import { mergeLegacyPracticeNotes } from './checkin';
 
 export interface MethodMixItem {
     methodId: number;
@@ -27,6 +28,7 @@ export interface UserPracticeJournalEntry {
     date: string;
     groupedMethods: string[];
     leafMethods: string[];
+    practiceNote: string;
     reflectionNote: string;
     bodyFeelingNote: string;
 }
@@ -179,6 +181,7 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12,
     const { rows } = await db.query(
         `SELECT l.id,
                 l.checkin_date,
+                l.practice_note,
                 l.reflection_note,
                 l.body_feeling_note,
                 ARRAY_AGG(pm.id ORDER BY pm.sort_order ASC, pm.id ASC)
@@ -189,10 +192,7 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12,
          LEFT JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
          LEFT JOIN practice_methods pm ON pm.id = s.practice_method_id
          WHERE l.telegram_user_id = $1
-           AND (
-               COALESCE(BTRIM(l.reflection_note), '') <> ''
-               OR COALESCE(BTRIM(l.body_feeling_note), '') <> ''
-           )
+           AND COALESCE(BTRIM(l.practice_note), '') <> ''
          GROUP BY l.id
          ORDER BY l.checkin_date DESC
          LIMIT $2`,
@@ -212,6 +212,7 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12,
             }
         });
 
+        const practiceNote = row.practice_note || mergeLegacyPracticeNotes(row.reflection_note, row.body_feeling_note, locale);
         return {
             id: Number(row.id),
             date: row.checkin_date,
@@ -220,8 +221,9 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12,
                 const method = taxonomy.rowById.get(methodId);
                 return method ? [getLocalizedMethodName(method, locale)] : [];
             }),
-            reflectionNote: row.reflection_note || '',
-            bodyFeelingNote: row.body_feeling_note || ''
+            practiceNote,
+            reflectionNote: practiceNote,
+            bodyFeelingNote: ''
         };
     });
 };
@@ -229,8 +231,7 @@ export const getUserPracticeJournal = async (telegramUserId: number, limit = 12,
 export const getCommunityPracticeJournal = async (page = 1, limit = 20): Promise<CommunityPracticeJournalPage> => {
     const taxonomy = await getMethodTaxonomy();
     const offset = (page - 1) * limit;
-    const journalFilter = `COALESCE(BTRIM(l.reflection_note), '') <> ''
-        OR COALESCE(BTRIM(l.body_feeling_note), '') <> ''`;
+    const journalFilter = `COALESCE(BTRIM(l.practice_note), '') <> ''`;
     const countRes = await db.query(
         `SELECT COUNT(*) AS total FROM telegram_checkin_logs l WHERE ${journalFilter}`
     );
@@ -239,6 +240,7 @@ export const getCommunityPracticeJournal = async (page = 1, limit = 20): Promise
         `SELECT l.id,
                 l.telegram_user_id,
                 l.checkin_date::text AS checkin_date,
+                l.practice_note,
                 l.reflection_note,
                 l.body_feeling_note,
                 u.username,
@@ -270,6 +272,7 @@ export const getCommunityPracticeJournal = async (page = 1, limit = 20): Promise
         });
         const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
 
+        const practiceNote = row.practice_note || mergeLegacyPracticeNotes(row.reflection_note, row.body_feeling_note);
         return {
             id: Number(row.id),
             telegramUserId: Number(row.telegram_user_id),
@@ -279,8 +282,9 @@ export const getCommunityPracticeJournal = async (page = 1, limit = 20): Promise
             leafMethods: Array.isArray(row.leaf_method_names)
                 ? row.leaf_method_names.filter((name: string | null) => typeof name === 'string')
                 : [],
-            reflectionNote: row.reflection_note || '',
-            bodyFeelingNote: row.body_feeling_note || ''
+            practiceNote,
+            reflectionNote: practiceNote,
+            bodyFeelingNote: ''
         };
     });
 

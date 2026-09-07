@@ -4,6 +4,7 @@ import { GroupedBadge, getGroupedUserBadges } from './badges';
 import { getUserStats, UserStats } from './stats';
 import { getGroupedMethodRowsForLeafIds, getLocalizedMethodName, getMethodTaxonomy } from './taxonomy';
 import { Locale } from '../i18n';
+import { mergeLegacyPracticeNotes } from './checkin';
 
 const TIMEZONE = 'Asia/Taipei';
 
@@ -12,6 +13,7 @@ export interface TelegramHistoryEntry {
     date: string;
     groupedMethods: string[];
     leafMethods: string[];
+    practiceNote: string;
     reflectionNote: string;
     bodyFeelingNote: string;
     source: string | null;
@@ -49,6 +51,7 @@ export const getTelegramHistory = async (
         db.query(
             `SELECT l.id,
                     l.checkin_date,
+                    l.practice_note,
                     l.reflection_note,
                     l.body_feeling_note,
                     l.source,
@@ -75,6 +78,7 @@ export const getTelegramHistory = async (
             ? row.method_ids.map((methodId: string | number) => Number(methodId)).filter((methodId: number) => Number.isFinite(methodId))
             : [];
 
+        const practiceNote = row.practice_note || mergeLegacyPracticeNotes(row.reflection_note, row.body_feeling_note, locale);
         return {
             id: row.id,
             date: row.checkin_date,
@@ -83,8 +87,9 @@ export const getTelegramHistory = async (
                 const method = taxonomy.rowById.get(methodId);
                 return method ? [getLocalizedMethodName(method, locale)] : [];
             }),
-            reflectionNote: row.reflection_note || '',
-            bodyFeelingNote: row.body_feeling_note || '',
+            practiceNote,
+            reflectionNote: practiceNote,
+            bodyFeelingNote: '',
             source: row.source || null,
         };
     });

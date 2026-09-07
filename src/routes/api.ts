@@ -1,6 +1,6 @@
 import { Request, Router } from 'express';
 import { verifyTelegramWebAppInitData } from '../utils/telegramWebApp';
-import { getPracticeMethods, getTodayCheckin, saveTodayCheckin, upsertTelegramUser } from '../services/checkin';
+import { getPracticeMethods, getTodayCheckin, mergeLegacyPracticeNotes, saveTodayCheckin, upsertTelegramUser } from '../services/checkin';
 import { getLeaderboard, getLevelTitle, getUserStats, LeaderboardPeriod } from '../services/stats';
 import { evaluateTelegramBadges } from '../services/badges';
 import { getUserBadges } from '../services/badges';
@@ -64,8 +64,8 @@ router.get('/checkin/today', async (req, res) => {
     try {
         const initData = resolveInitData(req);
         const auth = verifyTelegramWebAppInitData(initData);
-        await resolveUserLocale(req, auth.user);
-        const data = await getTodayCheckin(auth.user.id);
+        const locale = await resolveUserLocale(req, auth.user);
+        const data = await getTodayCheckin(auth.user.id, locale);
         console.log(`[api] loaded today checkin in ${Date.now() - startedAt}ms for ${auth.user.id}`);
         res.json(data);
     } catch (error) {
@@ -87,10 +87,15 @@ router.post('/checkin', async (req, res) => {
                     .filter((id: number) => Number.isFinite(id) && id > 0)
             ))
             : [];
-        const reflectionNote = typeof req.body?.reflectionNote === 'string' ? req.body.reflectionNote : '';
-        const bodyFeelingNote = typeof req.body?.bodyFeelingNote === 'string' ? req.body.bodyFeelingNote : '';
+        const practiceNote = typeof req.body?.practiceNote === 'string'
+            ? req.body.practiceNote
+            : mergeLegacyPracticeNotes(
+                typeof req.body?.reflectionNote === 'string' ? req.body.reflectionNote : '',
+                typeof req.body?.bodyFeelingNote === 'string' ? req.body.bodyFeelingNote : '',
+                locale
+            );
 
-        const saved = await saveTodayCheckin(auth.user.id, methodIds, reflectionNote, bodyFeelingNote, locale);
+        const saved = await saveTodayCheckin(auth.user.id, methodIds, practiceNote, locale);
         const unlockedBadges = await evaluateTelegramBadges(auth.user.id, saved.selectedMethodCodes, locale);
         const stats = await getUserStats(auth.user.id);
         try {

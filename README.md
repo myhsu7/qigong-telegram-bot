@@ -10,8 +10,7 @@ Telegram version of the Qigong check-in companion bot.
 - Traditional Chinese, Simplified Chinese, and English Bot and Web App interfaces
 - Web App form for:
   - multi-select practice methods
-  - reflection note
-  - body feeling note
+  - one combined practice reflection and body-sensation note
 - same-day overwrite behavior implemented in backend API
 
 ## Setup
@@ -50,6 +49,8 @@ psql "$DATABASE_URL" -f migrations/009_add_songjing_method.sql
 psql "$DATABASE_URL" -f migrations/010_telegram_group_operations.sql
 psql "$DATABASE_URL" -f migrations/011_backfill_2026_sanfu_badge.sql
 psql "$DATABASE_URL" -f migrations/012_multilingual_experience.sql
+psql "$DATABASE_URL" -f migrations/013_telegram_unified_practice_note.sql
+psql "$DATABASE_URL" -f migrations/014_telegram_backfill_unified_practice_note.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -75,9 +76,13 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/011_backfill_2026_sanfu_badge.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/012_multilingual_experience.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/013_telegram_unified_practice_note.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/014_telegram_backfill_unified_practice_note.sql
 ```
 
 Migration 011 idempotently awards the 2026 `夏練三伏` badge to users who checked in on all 40 days from July 15 through August 23. The service also reconciles the latest completed Sanfu period at startup and daily at 00:10 Asia/Taipei.
+
+Migrations 013 and 014 must run before restarting the updated application. Migration 013 adds `practice_note` and keeps legacy writes synchronized during rollout; migration 014 backfills existing reflection and body-sensation notes without dropping the old columns.
 
 If you are reusing the same PostgreSQL container as the LINE bot, make sure your `.env` points to the Telegram database:
 

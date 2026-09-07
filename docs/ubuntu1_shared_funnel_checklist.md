@@ -112,7 +112,11 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/010_telegram_group_operations.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/011_backfill_2026_sanfu_badge.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/012_multilingual_experience.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/013_telegram_unified_practice_note.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/014_telegram_backfill_unified_practice_note.sql
 ```
+
+`013_telegram_unified_practice_note.sql` 與 `014_telegram_backfill_unified_practice_note.sql` 必須在重啟新版服務前執行；它們會保留舊欄位、回填既有資料，並在新舊版本並行期間同步舊版寫入。
 
 ### 5. build 與啟動
 

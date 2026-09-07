@@ -6,12 +6,14 @@ import { normalizeSelectedLeafIds } from './taxonomy';
 import { Locale, methodName, normalizeLocale } from '../i18n';
 
 const TIMEZONE = 'Asia/Taipei';
+export const MAX_PRACTICE_NOTE_LENGTH = 2100;
 
 export interface TodayCheckinResponse {
     date: string;
     alreadyCheckedIn: boolean;
     checkinLogId: number | null;
     selectedMethodIds: number[];
+    practiceNote: string;
     reflectionNote: string;
     bodyFeelingNote: string;
 }
@@ -41,11 +43,11 @@ export const getPracticeMethods = async (): Promise<PracticeMethod[]> => {
     return buildPracticeMethodTree(await getPracticeMethodRows());
 };
 
-export const getTodayCheckin = async (telegramUserId: number): Promise<TodayCheckinResponse> => {
+export const getTodayCheckin = async (telegramUserId: number, locale: Locale = 'zh_TW'): Promise<TodayCheckinResponse> => {
     const today = moment().tz(TIMEZONE).format('YYYY-MM-DD');
 
     const { rows } = await db.queryWithRetry(
-        `SELECT id, reflection_note, body_feeling_note
+        `SELECT id, practice_note, reflection_note, body_feeling_note
          FROM telegram_checkin_logs
          WHERE telegram_user_id = $1 AND checkin_date = $2`,
         [telegramUserId, today]
@@ -57,6 +59,7 @@ export const getTodayCheckin = async (telegramUserId: number): Promise<TodayChec
             alreadyCheckedIn: false,
             checkinLogId: null,
             selectedMethodIds: [],
+            practiceNote: '',
             reflectionNote: '',
             bodyFeelingNote: ''
         };
@@ -72,33 +75,44 @@ export const getTodayCheckin = async (telegramUserId: number): Promise<TodayChec
         [checkin.id]
     );
 
+    const practiceNote = checkin.practice_note || mergeLegacyPracticeNotes(checkin.reflection_note, checkin.body_feeling_note, locale);
     return {
         date: today,
         alreadyCheckedIn: true,
         checkinLogId: checkin.id,
         selectedMethodIds: normalizeSelectedLeafIds(selected.rows.map((r) => r.practice_method_id), practiceMethodRows),
-        reflectionNote: checkin.reflection_note || '',
-        bodyFeelingNote: checkin.body_feeling_note || ''
+        practiceNote,
+        reflectionNote: practiceNote,
+        bodyFeelingNote: ''
     };
 };
 
-const buildLegacyNote = (methodNames: string[], reflectionNote: string, bodyFeelingNote: string) => {
+export const mergeLegacyPracticeNotes = (reflectionNote = '', bodyFeelingNote = '', _locale: Locale = 'zh_TW') => {
+    const reflection = reflectionNote.trim();
+    const bodyFeeling = bodyFeelingNote.trim();
+    if (!reflection || !bodyFeeling) return reflection || bodyFeeling;
+    return `${reflection}\n${bodyFeeling}`;
+};
+
+export const buildLegacyNote = (methodNames: string[], practiceNote = '', locale: Locale = 'zh_TW') => {
     const parts: string[] = [];
     if (methodNames.length > 0) {
         parts.push(`功法：${methodNames.join('、')}`);
     }
-    if (reflectionNote.trim()) {
-        parts.push(`心得：${reflectionNote.trim()}`);
-    }
-    if (bodyFeelingNote.trim()) {
-        parts.push(`身體感受：${bodyFeelingNote.trim()}`);
+    if (practiceNote.trim()) {
+        const label = locale === 'en' ? 'Reflection and sensations: ' : locale === 'zh_CN' ? '心得与感受：' : '心得與感受：';
+        parts.push(`${label}${practiceNote.trim()}`);
     }
     return parts.join('；');
 };
 
-export const saveTodayCheckin = async (telegramUserId: number, methodIds: number[], reflectionNote: string, bodyFeelingNote: string, locale: Locale = 'zh_TW') => {
+export const saveTodayCheckin = async (telegramUserId: number, methodIds: number[], practiceNote: string, locale: Locale = 'zh_TW') => {
     if (methodIds.length === 0) {
         throw new Error('At least one practice method must be selected');
+    }
+    const normalizedPracticeNote = practiceNote.trim();
+    if (normalizedPracticeNote.length > MAX_PRACTICE_NOTE_LENGTH) {
+        throw new Error(`Practice note must be ${MAX_PRACTICE_NOTE_LENGTH} characters or fewer`);
     }
 
     const today = moment().tz(TIMEZONE).format('YYYY-MM-DD');
@@ -129,7 +143,7 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
             nameEn: row.name_en
         }, locale));
         const legacyMethodNames = methodRows.rows.map((row) => row.name_zh);
-        const note = buildLegacyNote(legacyMethodNames, reflectionNote, bodyFeelingNote);
+        const note = buildLegacyNote(legacyMethodNames, normalizedPracticeNote, locale);
 
         const existing = await client.query(
             `SELECT id
@@ -146,14 +160,15 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
             checkinLogId = existing.rows[0].id;
 
             await client.query(
-                `UPDATE telegram_checkin_logs
-                 SET reflection_note = $1,
-                     body_feeling_note = $2,
-                     note = $3,
+                 `UPDATE telegram_checkin_logs
+                 SET practice_note = $1,
+                     reflection_note = $1,
+                     body_feeling_note = NULL,
+                     note = $2,
                      source = 'webapp',
                      updated_at = CURRENT_TIMESTAMP
-                 WHERE id = $4`,
-                [reflectionNote || null, bodyFeelingNote || null, note || null, checkinLogId]
+                 WHERE id = $3`,
+                [normalizedPracticeNote || null, note || null, checkinLogId]
             );
 
             await client.query(
@@ -163,10 +178,10 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
             );
         } else {
             const inserted = await client.query(
-                `INSERT INTO telegram_checkin_logs (telegram_user_id, checkin_date, reflection_note, body_feeling_note, note, source)
-                 VALUES ($1, $2, $3, $4, $5, 'webapp')
+                `INSERT INTO telegram_checkin_logs (telegram_user_id, checkin_date, practice_note, reflection_note, body_feeling_note, note, source)
+                 VALUES ($1, $2, $3, $3, NULL, $4, 'webapp')
                  RETURNING id`,
-                [telegramUserId, today, reflectionNote || null, bodyFeelingNote || null, note || null]
+                [telegramUserId, today, normalizedPracticeNote || null, note || null]
             );
             checkinLogId = inserted.rows[0].id;
         }

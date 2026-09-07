@@ -32,14 +32,13 @@
     .tag { display:inline-flex; align-items:center; border-radius:999px; padding:6px 10px; font-size:12px; }
     .tag.group { background:#ede9fe; color:#6d28d9; }
     .tag.leaf { background:#ecfeff; color:#0f766e; }
-    .note-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .note-box { background:#f8fafc; border-radius:12px; padding:12px; }
+    .note-content { white-space:pre-wrap; overflow-wrap:anywhere; }
     .note-label { color:#6b7280; font-size:12px; text-transform:uppercase; font-weight:700; margin-bottom:6px; }
     @media (max-width: 900px) {
       .layout { grid-template-columns:1fr; }
       .sidebar { padding-bottom:12px; }
       .grid { grid-template-columns: 1fr; }
-      .note-grid { grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -101,7 +100,7 @@
         </div>
 
         <div class="card" style="margin-top:20px;">
-          <h2 style="margin-top:0;">最近心得與身體感受</h2>
+          <h2 style="margin-top:0;">最近練功心得與感受</h2>
           <div id="journalList" class="journal-list">
             <div class="muted">請先搜尋並選擇學員。</div>
           </div>
@@ -182,30 +181,26 @@
     const renderJournal = (entries) => {
       const journalList = document.getElementById('journalList');
       if (!entries || entries.length === 0) {
-        journalList.innerHTML = '<div class="muted">目前沒有可顯示的心得或身體感受。</div>';
+        journalList.innerHTML = '<div class="muted">目前沒有可顯示的練功心得與感受。</div>';
         return;
       }
 
       journalList.innerHTML = entries.map((entry) => {
         const groupedTags = (entry.groupedMethods || []).map((name) => `<span class="tag group">${escapeHtml(name)}</span>`).join('');
         const leafTags = (entry.leafMethods || []).map((name) => `<span class="tag leaf">${escapeHtml(name)}</span>`).join('');
-        const reflectionText = escapeHtml(entry.reflectionNote || '未填寫');
-        const bodyFeelingText = escapeHtml(entry.bodyFeelingNote || '未填寫');
+        const reflection = String(entry.reflectionNote || '').trim();
+        const bodyFeeling = String(entry.bodyFeelingNote || '').trim();
+        const legacyNote = reflection && bodyFeeling ? `${reflection}\n${bodyFeeling}` : reflection || bodyFeeling;
+        const practiceNote = entry.practiceNote || legacyNote;
 
         return `
           <div class="journal-entry">
             <div class="journal-date">${escapeHtml(entry.date)}</div>
             <div class="tag-group">${groupedTags}</div>
             <div class="tag-group">${leafTags}</div>
-            <div class="note-grid">
-              <div class="note-box">
-                <div class="note-label">練功心得</div>
-                <div>${reflectionText}</div>
-              </div>
-              <div class="note-box">
-                <div class="note-label">身體感受</div>
-                <div>${bodyFeelingText}</div>
-              </div>
+            <div class="note-box">
+              <div class="note-label">練功心得與感受</div>
+              <div class="note-content">${escapeHtml(practiceNote || '未填寫')}</div>
             </div>
           </div>
         `;

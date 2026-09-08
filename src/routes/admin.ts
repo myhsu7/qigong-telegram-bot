@@ -5,6 +5,7 @@ import { buildMethodReview, getCommunityMethodMix, getCommunityPracticeJournal, 
 import { getAdminBadgeAchievements } from '../services/badges';
 import { AdminLeaderboardLimit, getAdminLifetimeLeaderboard, getAdminPeriodStreaks, getCheckedInUsersByDate, getOverviewStats, getPendingUsersByDate } from '../services/stats';
 import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
+import { getPracticeFeelingTags, savePracticeFeelingTags } from '../services/practiceFeelingTags';
 
 const router = Router();
 
@@ -26,6 +27,10 @@ router.get('/achievements', (req, res) => {
 
 router.get('/journals', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'dist', 'public', 'admin', 'journals.html'));
+});
+
+router.get('/practice-feeling-tags', (_req, res) => {
+    res.sendFile(path.join(process.cwd(), 'dist', 'public', 'admin', 'practice-feeling-tags.html'));
 });
 
 router.get('/api/overview', async (req, res) => {
@@ -166,6 +171,24 @@ router.get('/api/journals', async (req, res) => {
     } catch (error) {
         console.error('[admin] journals failed', error);
         res.status(500).json({ error: 'Failed to load journals' });
+    }
+});
+
+router.get('/api/practice-feeling-tags', async (_req, res) => {
+    try {
+        res.json({ tags: await getPracticeFeelingTags(true) });
+    } catch (error) {
+        console.error('[admin] practice feeling tags failed', error);
+        res.status(500).json({ error: 'Failed to load practice feeling tags' });
+    }
+});
+
+router.put('/api/practice-feeling-tags', async (req, res) => {
+    try {
+        res.json({ tags: await savePracticeFeelingTags(req.body?.tags) });
+    } catch (error) {
+        console.error('[admin] save practice feeling tags failed', error);
+        res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid tag data' });
     }
 });
 

@@ -12,6 +12,7 @@ import { isLocale, Locale } from '../i18n';
 import { setTelegramUserLocale } from '../services/language';
 import { TelegramWebAppUser } from '../utils/telegramWebApp';
 import { syncPrivateCommandMenu } from '../bot/telegram';
+import { getPracticeFeelingTags } from '../services/practiceFeelingTags';
 
 const router = Router();
 
@@ -56,6 +57,20 @@ router.get('/practice-methods', async (req, res) => {
     } catch (error) {
         console.error(`[api] failed to load practice methods after ${Date.now() - startedAt}ms`, error);
         res.status(500).json({ error: 'Failed to load practice methods' });
+    }
+});
+
+router.get('/practice-feeling-tags', async (req, res) => {
+    try {
+        verifyTelegramWebAppInitData(resolveInitData(req));
+    } catch (error) {
+        return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    }
+    try {
+        res.json({ tags: await getPracticeFeelingTags() });
+    } catch (error) {
+        console.error('[api] failed to load practice feeling tags', error);
+        res.status(500).json({ error: 'Failed to load practice feeling tags' });
     }
 });
 

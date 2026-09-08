@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telegram 快速感受標籤</title>
+  <style>
+    *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f6f7fb;color:#1f2937}.layout{display:grid;grid-template-columns:240px 1fr;min-height:100vh}.sidebar{background:#111827;color:#fff;padding:20px}.sidebar a{display:block;color:#fff;text-decoration:none;padding:10px 12px;border-radius:10px;margin-bottom:8px}.sidebar a.active,.sidebar a:hover{background:#374151}.content{padding:24px;max-width:1100px}.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:14px}.fields{display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:12px;align-items:end}label{display:block;color:#6b7280;font-size:13px;margin-bottom:5px}input[type=text]{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:9px;font-size:14px}.actions{display:flex;align-items:center;gap:8px}.enabled{display:flex;align-items:center;gap:5px;white-space:nowrap}button{padding:10px 14px;border:0;background:#0d6efd;color:#fff;border-radius:10px;cursor:pointer}.ghost{background:#e5e7eb;color:#111827}.toolbar{display:flex;gap:10px;margin-top:20px}.status{margin-top:14px}.error{color:#b91c1c}.success{color:#166534}@media(max-width:800px){.layout{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.content{padding:16px}}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2 style="margin-top:0;">Telegram Admin</h2>
+      <a href="/telegram/admin">總覽</a><a href="/telegram/admin/leaderboard">排行榜</a><a href="/telegram/admin/achievements">成就榜</a><a href="/telegram/admin/journals">學員心得流</a><a href="/telegram/admin/method-analysis">功法分析</a><a href="/telegram/admin/practice-feeling-tags" class="active">快速感受標籤</a>
+    </aside>
+    <main class="content">
+      <h1>快速感受標籤</h1>
+      <p>調整打卡頁顯示的標籤。使用上下按鈕排序；停用後不會影響既有心得。</p>
+      <div id="tagList"></div>
+      <div class="toolbar"><button id="addTag" class="ghost" type="button">新增標籤</button><button id="saveTags" type="button">儲存全部變更</button></div>
+      <div id="status" class="status" role="status"></div>
+    </main>
+  </div>
+  <template id="tagTemplate"><div class="card tag-row" data-id=""><div class="fields"><div><label>繁體中文</label><input class="name-zh" type="text" maxlength="40" required></div><div><label>簡體中文</label><input class="name-zh-cn" type="text" maxlength="40"></div><div><label>English</label><input class="name-en" type="text" maxlength="80"></div><div class="actions"><label class="enabled"><input class="is-active" type="checkbox" checked>啟用</label><button class="ghost move-up" type="button" aria-label="上移">↑</button><button class="ghost move-down" type="button" aria-label="下移">↓</button></div></div></div></template>
+  <script>
+    const list=document.getElementById('tagList'),status=document.getElementById('status'),template=document.getElementById('tagTemplate');
+    const addRow=(tag={})=>{const row=template.content.firstElementChild.cloneNode(true);row.dataset.id=tag.id||'';row.querySelector('.name-zh').value=tag.nameZh||'';row.querySelector('.name-zh-cn').value=tag.nameZhCn||'';row.querySelector('.name-en').value=tag.nameEn||'';row.querySelector('.is-active').checked=tag.isActive!==false;list.append(row);};
+    list.addEventListener('click',(event)=>{const row=event.target.closest('.tag-row');if(!row)return;if(event.target.closest('.move-up')&&row.previousElementSibling)list.insertBefore(row,row.previousElementSibling);if(event.target.closest('.move-down')&&row.nextElementSibling)list.insertBefore(row.nextElementSibling,row);});
+    document.getElementById('addTag').addEventListener('click',()=>addRow());
+    document.getElementById('saveTags').addEventListener('click',async()=>{const button=document.getElementById('saveTags');const tags=[...list.querySelectorAll('.tag-row')].map((row)=>({id:row.dataset.id||undefined,nameZh:row.querySelector('.name-zh').value,nameZhCn:row.querySelector('.name-zh-cn').value,nameEn:row.querySelector('.name-en').value,isActive:row.querySelector('.is-active').checked}));button.disabled=true;status.className='status';status.textContent='儲存中...';try{const response=await fetch('/telegram/admin/api/practice-feeling-tags',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({tags})});const body=await response.json();if(!response.ok)throw new Error(body.error||'儲存失敗');list.replaceChildren();body.tags.forEach(addRow);status.className='status success';status.textContent='快速感受標籤已儲存。';}catch(error){status.className='status error';status.textContent=error.message;}finally{button.disabled=false;}});
+    fetch('/telegram/admin/api/practice-feeling-tags').then(async(response)=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'載入失敗');body.tags.forEach(addRow);}).catch((error)=>{status.className='status error';status.textContent=error.message;});
+  </script>
+</body>
+</html>

@@ -22,6 +22,10 @@
     .child-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
     .child-label { display: flex; align-items: center; gap: 10px; flex: 1; color: #4b5563; }
     .method-hint { color: #9ca3af; font-size: 12px; }
+    .feeling-hint { margin: 10px 0 8px; }
+    .feeling-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .feeling-tag { width: auto; padding: 8px 12px; border: 1px solid #93c5fd; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 14px; font-weight: 500; }
+    .feeling-tag.selected { background: #0d6efd; border-color: #0d6efd; color: #fff; }
     textarea { width: 100%; min-height: 96px; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px; font-size: 14px; box-sizing: border-box; }
     button { width: 100%; background: #0d6efd; color: #fff; border: 0; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
     button:disabled { background: #9ca3af; }
@@ -50,6 +54,8 @@
     <div class="card">
       <h2 data-i18n="practiceNoteHeading">練功心得與身體感受（選填）</h2>
       <textarea id="practiceNote" maxlength="1000"></textarea>
+      <p id="feelingTagsHint" class="muted feeling-hint" data-i18n="feelingTagsHint" hidden>快速選擇感受（可複選）</p>
+      <div id="feelingTags" class="feeling-tags"></div>
     </div>
 
     <button type="button" id="submitButton" data-i18n="submit">完成打卡</button>
@@ -65,13 +71,13 @@
 
     const translations = {
       zh_TW: {
-        title: '氣功打卡', language: '語言', heading: '今日打卡', intro: '請勾選今天練習的功法，並可選填練功心得與感受。', loadingToday: '正在載入今日打卡資料...', methodsHeading: '今日功法（可複選）', practiceNoteHeading: '練功心得與身體感受（選填）', practiceNotePlaceholder: '記錄今天練功的心得、身體感受或其他體會...', submit: '完成打卡', selectAllChildren: '勾選即全選子招式', authError: '尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。', requestFailed: '請求失敗', methodsLoadFailed: '功法列表載入失敗：', todayLoadFailed: '今日打卡資料載入失敗：', alreadyCheckedIn: '你今天已打卡，可修改今日內容後重新送出。', notCheckedIn: '今天尚未打卡，請完成以下內容後送出。', loadFailed: '載入失敗：', selectMethod: '請至少勾選一個功法。', saving: '正在儲存打卡資料...', streak: (n) => `連續 ${n} 天`, total: (n) => `總計 ${n} 天`, unlocked: '解鎖：', success: '打卡成功：', saved: '今天的打卡內容已儲存，你可以再次修改後重新送出。', saveFailed: '儲存失敗：'
+        title: '氣功打卡', language: '語言', heading: '今日打卡', intro: '請勾選今天練習的功法，並可選填練功心得與感受。', loadingToday: '正在載入今日打卡資料...', methodsHeading: '今日功法（可複選）', practiceNoteHeading: '練功心得與身體感受（選填）', feelingTagsHint: '快速選擇感受（可複選）', practiceNotePlaceholder: '記錄今天練功的心得、身體感受或其他體會...', submit: '完成打卡', selectAllChildren: '勾選即全選子招式', authError: '尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。', requestFailed: '請求失敗', methodsLoadFailed: '功法列表載入失敗：', feelingTagsLoadFailed: '快速感受標籤載入失敗：', todayLoadFailed: '今日打卡資料載入失敗：', noteTooLong: '心得與感受最多 1000 字，無法加入此標籤。', alreadyCheckedIn: '你今天已打卡，可修改今日內容後重新送出。', notCheckedIn: '今天尚未打卡，請完成以下內容後送出。', loadFailed: '載入失敗：', selectMethod: '請至少勾選一個功法。', saving: '正在儲存打卡資料...', streak: (n) => `連續 ${n} 天`, total: (n) => `總計 ${n} 天`, unlocked: '解鎖：', success: '打卡成功：', saved: '今天的打卡內容已儲存，你可以再次修改後重新送出。', saveFailed: '儲存失敗：'
       },
       zh_CN: {
-        title: '气功打卡', language: '语言', heading: '今日打卡', intro: '请选择今天练习的功法，并可选填练功心得与感受。', loadingToday: '正在加载今日打卡数据...', methodsHeading: '今日功法（可多选）', practiceNoteHeading: '练功心得与身体感受（选填）', practiceNotePlaceholder: '记录今天练功的心得、身体感受或其他体会...', submit: '完成打卡', selectAllChildren: '勾选即全选子招式', authError: '尚未取得 Telegram 验证信息，请从 Telegram App 内重新打开打卡页。', requestFailed: '请求失败', methodsLoadFailed: '功法列表加载失败：', todayLoadFailed: '今日打卡数据加载失败：', alreadyCheckedIn: '你今天已打卡，可修改今日内容后重新提交。', notCheckedIn: '今天尚未打卡，请完成以下内容后提交。', loadFailed: '加载失败：', selectMethod: '请至少选择一个功法。', saving: '正在保存打卡数据...', streak: (n) => `连续 ${n} 天`, total: (n) => `总计 ${n} 天`, unlocked: '解锁：', success: '打卡成功：', saved: '今天的打卡内容已保存，你可以再次修改后重新提交。', saveFailed: '保存失败：'
+        title: '气功打卡', language: '语言', heading: '今日打卡', intro: '请选择今天练习的功法，并可选填练功心得与感受。', loadingToday: '正在加载今日打卡数据...', methodsHeading: '今日功法（可多选）', practiceNoteHeading: '练功心得与身体感受（选填）', feelingTagsHint: '快速选择感受（可多选）', practiceNotePlaceholder: '记录今天练功的心得、身体感受或其他体会...', submit: '完成打卡', selectAllChildren: '勾选即全选子招式', authError: '尚未取得 Telegram 验证信息，请从 Telegram App 内重新打开打卡页。', requestFailed: '请求失败', methodsLoadFailed: '功法列表加载失败：', feelingTagsLoadFailed: '快速感受标签加载失败：', todayLoadFailed: '今日打卡数据加载失败：', noteTooLong: '心得与感受最多 1000 字，无法加入此标签。', alreadyCheckedIn: '你今天已打卡，可修改今日内容后重新提交。', notCheckedIn: '今天尚未打卡，请完成以下内容后提交。', loadFailed: '加载失败：', selectMethod: '请至少选择一个功法。', saving: '正在保存打卡数据...', streak: (n) => `连续 ${n} 天`, total: (n) => `总计 ${n} 天`, unlocked: '解锁：', success: '打卡成功：', saved: '今天的打卡内容已保存，你可以再次修改后重新提交。', saveFailed: '保存失败：'
       },
       en: {
-        title: 'Qigong Check-in', language: 'Language', heading: 'Today’s Check-in', intro: 'Select the methods you practiced today. You may also add one practice note.', loadingToday: 'Loading today’s check-in...', methodsHeading: 'Today’s Methods (select all that apply)', practiceNoteHeading: 'Practice Reflection and Physical Sensations (optional)', practiceNotePlaceholder: 'Record reflections, physical sensations, or anything else from today’s practice...', submit: 'Complete Check-in', selectAllChildren: 'Selects all child forms', authError: 'Telegram authentication is unavailable. Please reopen this page in the Telegram app.', requestFailed: 'Request failed', methodsLoadFailed: 'Could not load practice methods: ', todayLoadFailed: 'Could not load today’s check-in: ', alreadyCheckedIn: 'You have checked in today. You can edit the details and submit again.', notCheckedIn: 'You have not checked in today. Complete the details below to continue.', loadFailed: 'Could not load data: ', selectMethod: 'Select at least one practice method.', saving: 'Saving your check-in...', streak: (n) => `${n}-day streak`, total: (n) => `${n} days total`, unlocked: 'Unlocked: ', success: 'Check-in successful: ', saved: 'Today’s check-in has been saved. You can edit and submit it again.', saveFailed: 'Could not save: '
+        title: 'Qigong Check-in', language: 'Language', heading: 'Today’s Check-in', intro: 'Select the methods you practiced today. You may also add one practice note.', loadingToday: 'Loading today’s check-in...', methodsHeading: 'Today’s Methods (select all that apply)', practiceNoteHeading: 'Practice Reflection and Physical Sensations (optional)', feelingTagsHint: 'Quick sensations (select all that apply)', practiceNotePlaceholder: 'Record reflections, physical sensations, or anything else from today’s practice...', submit: 'Complete Check-in', selectAllChildren: 'Selects all child forms', authError: 'Telegram authentication is unavailable. Please reopen this page in the Telegram app.', requestFailed: 'Request failed', methodsLoadFailed: 'Could not load practice methods: ', feelingTagsLoadFailed: 'Could not load quick sensation tags: ', todayLoadFailed: 'Could not load today’s check-in: ', noteTooLong: 'The note is limited to 1,000 characters, so this tag cannot be added.', alreadyCheckedIn: 'You have checked in today. You can edit the details and submit again.', notCheckedIn: 'You have not checked in today. Complete the details below to continue.', loadFailed: 'Could not load data: ', selectMethod: 'Select at least one practice method.', saving: 'Saving your check-in...', streak: (n) => `${n}-day streak`, total: (n) => `${n} days total`, unlocked: 'Unlocked: ', success: 'Check-in successful: ', saved: 'Today’s check-in has been saved. You can edit and submit it again.', saveFailed: 'Could not save: '
       }
     };
     const localeKey = 'qigong_telegram_locale';
@@ -83,6 +89,8 @@
 
     const methodsContainer = document.getElementById('methodsContainer');
     const practiceNote = document.getElementById('practiceNote');
+    const feelingTags = document.getElementById('feelingTags');
+    const feelingTagsHint = document.getElementById('feelingTagsHint');
     const submitButton = document.getElementById('submitButton');
     const submitStatus = document.getElementById('submitStatus');
     const todayStatus = document.getElementById('todayStatus');
@@ -91,10 +99,12 @@
     let selectedMethodIds = new Set();
     let expandedMethodIds = new Set();
     let profileReady = false;
+    let practiceFeelingTags = [];
 
     const getInitData = () => window.Telegram?.WebApp?.initData || '';
     const localizedUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}locale=${encodeURIComponent(locale)}`;
     const getMethodName = (method) => (locale === 'en' ? method.nameEn : locale === 'zh_CN' ? method.nameZhCn : method.nameZh) || method.nameZh || '';
+    const getFeelingTagName = (tag) => (locale === 'en' ? tag.nameEn : locale === 'zh_CN' ? tag.nameZhCn : tag.nameZh) || tag.nameZh || '';
     const mergeLegacyNotes = (reflection = '', bodyFeeling = '') => {
       const reflectionText = reflection.trim();
       const bodyFeelingText = bodyFeeling.trim();
@@ -111,6 +121,48 @@
       languageSelect.setAttribute('aria-label', t.language);
       practiceNote.placeholder = t.practiceNotePlaceholder;
     };
+
+    const noteLines = () => practiceNote.value.split('\n').map((line) => line.trim()).filter(Boolean);
+    const getFeelingTagNames = (tag) => [...new Set([tag.nameZh, tag.nameZhCn, tag.nameEn].filter(Boolean))];
+    const renderFeelingTags = () => {
+      feelingTags.replaceChildren();
+      feelingTagsHint.hidden = practiceFeelingTags.length === 0;
+      const lines = new Set(noteLines());
+      practiceFeelingTags.forEach((tag) => {
+        const label = getFeelingTagName(tag);
+        if (!label) return;
+        const button = document.createElement('button');
+        const selected = getFeelingTagNames(tag).some((name) => lines.has(name));
+        button.type = 'button';
+        button.className = `feeling-tag${selected ? ' selected' : ''}`;
+        button.textContent = label;
+        button.setAttribute('aria-pressed', String(selected));
+        button.addEventListener('click', () => toggleFeelingTag(tag));
+        feelingTags.append(button);
+      });
+    };
+
+    const toggleFeelingTag = (tag) => {
+      const label = getFeelingTagName(tag);
+      const tagNames = new Set(getFeelingTagNames(tag));
+      const lines = practiceNote.value.split('\n');
+      const existingIndex = lines.findIndex((line) => tagNames.has(line.trim()));
+      if (existingIndex >= 0) {
+        lines.splice(existingIndex, 1);
+        practiceNote.value = lines.join('\n').replace(/^\n+|\n+$/g, '');
+      } else {
+        const next = practiceNote.value.trim() ? `${practiceNote.value.replace(/\s+$/, '')}\n${label}` : label;
+        if (next.length > practiceNote.maxLength) {
+          setStatus(submitStatus, t.noteTooLong, 'error');
+          return;
+        }
+        practiceNote.value = next;
+      }
+      renderFeelingTags();
+      practiceNote.focus();
+    };
+
+    practiceNote.addEventListener('input', renderFeelingTags);
 
     const setStatus = (el, message, className = '') => {
       el.textContent = message;
@@ -338,16 +390,19 @@
           return;
         }
 
-        const methodsResp = await apiFetch('/telegram/api/webapp/practice-methods').catch((error) => {
-          throw new Error(`${t.methodsLoadFailed}${error.message}`);
-        });
-
-        const todayResp = await apiFetch('/telegram/api/webapp/checkin/today').catch((error) => {
-          throw new Error(`${t.todayLoadFailed}${error.message}`);
-        });
+        const [methodsResp, todayResp, feelingTagsResp] = await Promise.all([
+          apiFetch('/telegram/api/webapp/practice-methods').catch((error) => { throw new Error(`${t.methodsLoadFailed}${error.message}`); }),
+          apiFetch('/telegram/api/webapp/checkin/today').catch((error) => { throw new Error(`${t.todayLoadFailed}${error.message}`); }),
+          apiFetch('/telegram/api/webapp/practice-feeling-tags').catch((error) => {
+            console.error(`${t.feelingTagsLoadFailed}${error.message}`);
+            return { tags: [] };
+          })
+        ]);
 
         renderMethods(methodsResp.methods, todayResp.selectedMethodIds);
         practiceNote.value = todayResp.practiceNote || mergeLegacyNotes(todayResp.reflectionNote, todayResp.bodyFeelingNote);
+        practiceFeelingTags = feelingTagsResp.tags;
+        renderFeelingTags();
 
         todayStatus.textContent = todayResp.alreadyCheckedIn
           ? t.alreadyCheckedIn

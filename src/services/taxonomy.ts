@@ -1,5 +1,8 @@
 import { db } from '../db';
 import { Locale, methodName } from '../i18n';
+import { createAsyncTtlCache } from '../utils/asyncTtlCache';
+
+const PRACTICE_METHOD_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface PracticeMethodRow {
     id: number;
@@ -48,15 +51,22 @@ const toPracticeMethodRow = (row: {
     methodType: row.method_type === 'group' ? 'group' : 'leaf'
 });
 
-export const getPracticeMethodRows = async (): Promise<PracticeMethodRow[]> => {
-    const { rows } = await db.queryWithRetry(
-        `SELECT id, code, name_zh, name_zh_cn, name_en, estimated_minutes, sort_order, parent_id, method_type
-         FROM practice_methods
-         WHERE is_active = TRUE
-         ORDER BY sort_order ASC, id ASC`
-    );
+const practiceMethodRowsCache = createAsyncTtlCache<PracticeMethodRow[]>(PRACTICE_METHOD_CACHE_TTL_MS);
 
-    return rows.map(toPracticeMethodRow);
+export const invalidatePracticeMethodCache = () => practiceMethodRowsCache.invalidate();
+
+export const getPracticeMethodRows = async (): Promise<PracticeMethodRow[]> => {
+    const rows = await practiceMethodRowsCache.get(async () => {
+        const result = await db.queryWithRetry(
+            `SELECT id, code, name_zh, name_zh_cn, name_en, estimated_minutes, sort_order, parent_id, method_type
+             FROM practice_methods
+             WHERE is_active = TRUE
+             ORDER BY sort_order ASC, id ASC`
+        );
+        return result.rows.map(toPracticeMethodRow);
+    });
+
+    return rows.map((row) => ({ ...row }));
 };
 
 export const buildPracticeMethodTree = (rows: PracticeMethodRow[]): PracticeMethod[] => {

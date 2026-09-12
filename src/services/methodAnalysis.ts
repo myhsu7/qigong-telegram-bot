@@ -1,4 +1,5 @@
 import { db } from '../db';
+import moment from 'moment-timezone';
 import { getLocalizedMethodName, getMethodTaxonomy } from './taxonomy';
 import { Locale, methodName } from '../i18n';
 import { mergeLegacyPracticeNotes } from './checkin';
@@ -145,12 +146,15 @@ const buildMethodMixResult = async (
     };
 };
 
-const getMethodSelectionRows = async (periodDays: number, telegramUserId?: number, locale: Locale = 'zh_TW'): Promise<MethodSelectionRow[]> => {
-    const params: Array<number> = [periodDays];
+const getMethodSelectionRows = async (periodDays: number, telegramUserId?: number, locale: Locale = 'zh_TW', endDate?: string): Promise<MethodSelectionRow[]> => {
+    const params: Array<number | string> = [periodDays];
     const userFilter = typeof telegramUserId === 'number' ? 'AND l.telegram_user_id = $2' : '';
     if (typeof telegramUserId === 'number') {
         params.push(telegramUserId);
     }
+    const endDateIndex = params.length + 1;
+    if (endDate) params.push(endDate);
+    const dateExpression = endDate ? `$${endDateIndex}::date` : `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Taipei')::date`;
 
     const { rows } = await db.query(
         `SELECT l.id AS checkin_log_id,
@@ -162,7 +166,8 @@ const getMethodSelectionRows = async (periodDays: number, telegramUserId?: numbe
          FROM telegram_checkin_logs l
          JOIN telegram_checkin_method_selections s ON s.checkin_log_id = l.id
          JOIN practice_methods pm ON pm.id = s.practice_method_id
-         WHERE l.checkin_date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Taipei')::date - ($1::int - 1))
+         WHERE l.checkin_date >= (${dateExpression} - ($1::int - 1))
+           AND l.checkin_date <= ${dateExpression}
            ${userFilter}
          ORDER BY l.id ASC, pm.sort_order ASC, pm.id ASC`,
         params
@@ -303,17 +308,19 @@ export const getCommunityMethodMix = async (periodDays: number): Promise<MethodM
     return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays));
 };
 
-export const getUserMethodMix = async (telegramUserId: number, periodDays: number, locale: Locale = 'zh_TW'): Promise<MethodMixResult> => {
+export const getUserMethodMix = async (telegramUserId: number, periodDays: number, locale: Locale = 'zh_TW', practiceTimezone = 'Asia/Taipei'): Promise<MethodMixResult> => {
+    const localToday = moment().tz(practiceTimezone).format('YYYY-MM-DD');
     const totalDaysQuery = `
         SELECT COUNT(*) AS total_checkin_days
         FROM telegram_checkin_logs
         WHERE telegram_user_id = $1
-          AND checkin_date >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Taipei')::date - ($2::int - 1))
+          AND checkin_date >= ($3::date - ($2::int - 1))
+          AND checkin_date <= $3::date
     `;
-    const totalDaysRes = await db.query(totalDaysQuery, [telegramUserId, periodDays]);
+    const totalDaysRes = await db.query(totalDaysQuery, [telegramUserId, periodDays, localToday]);
     const totalCheckinDays = parseInt(totalDaysRes.rows[0]?.total_checkin_days || '0', 10);
 
-    return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays, telegramUserId, locale), locale);
+    return buildMethodMixResult(periodDays, totalCheckinDays, await getMethodSelectionRows(periodDays, telegramUserId, locale, localToday), locale);
 };
 
 export const buildMethodReview = (result: MethodMixResult, locale: Locale = 'zh_TW') => {

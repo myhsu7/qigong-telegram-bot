@@ -6,6 +6,7 @@ import { getAdminBadgeAchievements } from '../services/badges';
 import { AdminLeaderboardLimit, getAdminLifetimeLeaderboard, getAdminPeriodStreaks, getCheckedInUsersByDate, getOverviewStats, getPendingUsersByDate } from '../services/stats';
 import { generateMethodReviewWithLlm } from '../services/methodReviewLlm';
 import { getPracticeFeelingTags, savePracticeFeelingTags } from '../services/practiceFeelingTags';
+import { getPracticeTimezoneSettings } from '../services/practiceTimezone';
 
 const router = Router();
 
@@ -98,9 +99,10 @@ router.get('/api/method-analysis/user', async (req, res) => {
     try {
         const userId = Number(req.query.userId);
         if (!userId) return res.status(400).json({ error: 'Missing userId' });
+        const timezone = (await getPracticeTimezoneSettings(userId)).practiceTimezone;
         const [analysis30, analysis90, journal] = await Promise.all([
-            getUserMethodMix(userId, 30),
-            getUserMethodMix(userId, 90),
+            getUserMethodMix(userId, 30, 'zh_TW', timezone),
+            getUserMethodMix(userId, 90, 'zh_TW', timezone),
             getUserPracticeJournal(userId)
         ]);
         const reviewText = await generateMethodReviewWithLlm(analysis30, buildMethodReview(analysis30), userId);

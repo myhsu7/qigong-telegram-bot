@@ -70,12 +70,14 @@ const hasBadge = async (telegramUserId: number, badgeId: string, earnedYear: num
 };
 
 const awardBadge = async (telegramUserId: number, badgeId: string, earnedYear: number, locale: Locale): Promise<UnlockedBadge | null> => {
-    if (await hasBadge(telegramUserId, badgeId, earnedYear)) return null;
-
-    await db.query(
-        `INSERT INTO telegram_user_badges (telegram_user_id, badge_id, earned_year) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+    const inserted = await db.query(
+        `INSERT INTO telegram_user_badges (telegram_user_id, badge_id, earned_year)
+         VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING
+         RETURNING badge_id`,
         [telegramUserId, badgeId, earnedYear]
     );
+    if (!inserted.rows.length) return null;
 
     const { rows } = await db.query(
         `SELECT id, name, emoji, description FROM telegram_badges WHERE id = $1`,
@@ -149,11 +151,18 @@ const getJieQiDateStr = (year: number, jieQiName: string): string | null => {
     return jieQi ? jieQi.toYmd() : null;
 };
 
-export const evaluateTelegramBadges = async (telegramUserId: number, selectedMethodCodes: string[], locale: Locale = 'zh_TW'): Promise<UnlockedBadge[]> => {
+export const evaluateTelegramBadges = async (
+    telegramUserId: number,
+    selectedMethodCodes: string[],
+    locale: Locale = 'zh_TW',
+    context: { checkinDate?: string; entryKind?: 'regular' | 'makeup'; practiceTimezone?: string } = {}
+): Promise<UnlockedBadge[]> => {
     const unlocked: UnlockedBadge[] = [];
-    const stats = await getUserStats(telegramUserId);
-    const now = moment().tz(TIMEZONE);
-    const currentYear = now.year();
+    const practiceTimezone = context.practiceTimezone || TIMEZONE;
+    const stats = await getUserStats(telegramUserId, practiceTimezone);
+    const now = moment().tz(practiceTimezone);
+    const targetDate = moment.tz(context.checkinDate || now.format('YYYY-MM-DD'), 'YYYY-MM-DD', practiceTimezone);
+    const targetYear = targetDate.year();
     const taxonomy = selectedMethodCodes.length > 0 ? await getMethodTaxonomy() : null;
     const selectedCodeSet = new Set(selectedMethodCodes);
 
@@ -185,30 +194,45 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
 
     // Time based badges
     const { rows: recentLogs } = await db.query(
-        `SELECT created_at FROM telegram_checkin_logs WHERE telegram_user_id = $1 ORDER BY created_at DESC LIMIT 5`,
+        `SELECT checkin_date, created_at, practice_timezone, entry_kind
+         FROM telegram_checkin_logs
+         WHERE telegram_user_id = $1
+         ORDER BY checkin_date DESC
+         LIMIT 5`,
         [telegramUserId]
     );
     if (recentLogs.length === 5 && stats.currentStreak >= 5) {
         let allMorning = true;
         let allNight = true;
-        for (const log of recentLogs) {
-            const hour = moment(log.created_at).tz(TIMEZONE).hour();
+        let consecutive = true;
+        for (let index = 0; index < recentLogs.length; index += 1) {
+            const log = recentLogs[index];
+            if (log.entry_kind !== 'regular' || !log.practice_timezone) {
+                allMorning = false;
+                allNight = false;
+            }
+            const hour = moment(log.created_at).tz(log.practice_timezone || practiceTimezone).hour();
             if (hour < 5 || hour >= 7) allMorning = false;
             if (hour < 21 || hour >= 23) allNight = false;
+            if (index > 0) {
+                const previous = moment.tz(recentLogs[index - 1].checkin_date, 'YYYY-MM-DD', practiceTimezone);
+                const current = moment.tz(log.checkin_date, 'YYYY-MM-DD', practiceTimezone);
+                if (previous.diff(current, 'days') !== 1) consecutive = false;
+            }
         }
-        if (allMorning) {
+        if (consecutive && allMorning) {
             const badge = await awardBadge(telegramUserId, 'time_morning', 0, locale);
             if (badge) unlocked.push(badge);
         }
-        if (allNight) {
+        if (consecutive && allNight) {
             const badge = await awardBadge(telegramUserId, 'time_night', 0, locale);
             if (badge) unlocked.push(badge);
         }
     }
 
     // Seasonal summer
-    const sanFuPeriod = getSanFuPeriod(currentYear);
-    if (sanFuPeriod && now.isSameOrAfter(sanFuPeriod.end, 'day')) {
+    const sanFuPeriod = getSanFuPeriod(targetYear);
+    if (sanFuPeriod && targetDate.isSameOrAfter(sanFuPeriod.end, 'day')) {
         const { rows } = await db.query(
             `SELECT COUNT(*) AS count
              FROM telegram_checkin_logs
@@ -216,16 +240,21 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
             [telegramUserId, sanFuPeriod.start.format('YYYY-MM-DD'), sanFuPeriod.end.format('YYYY-MM-DD')]
         );
         if (parseInt(rows[0].count, 10) >= sanFuPeriod.totalDays) {
-            const badge = await awardBadge(telegramUserId, 'seasonal_summer_27', currentYear, locale);
+            const badge = await awardBadge(telegramUserId, 'seasonal_summer_27', targetYear, locale);
             if (badge) unlocked.push(badge);
         }
     }
 
     // Seasonal winter
-    const winterSolsticeStr = getJieQiDateStr(currentYear, 'DONG_ZHI');
+    const targetYearSolstice = getJieQiDateStr(targetYear, 'DONG_ZHI');
+    const winterStartYear = targetYearSolstice && targetDate.isSameOrAfter(moment.tz(targetYearSolstice, practiceTimezone), 'day')
+        ? targetYear
+        : targetYear - 1;
+    const winterSolsticeStr = getJieQiDateStr(winterStartYear, 'DONG_ZHI');
     if (winterSolsticeStr) {
-        const winterSolstice = moment.tz(winterSolsticeStr, TIMEZONE);
-        if (now.diff(winterSolstice, 'days') === 27) {
+        const winterSolstice = moment.tz(winterSolsticeStr, practiceTimezone);
+        const winterEnd = winterSolstice.clone().add(26, 'days');
+        if (now.isSameOrAfter(winterEnd, 'day')) {
             const { rows } = await db.query(
                 `WITH guishou_days AS (
                      SELECT DISTINCT l.checkin_date AS local_date
@@ -244,13 +273,13 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
                 [
                     telegramUserId,
                     winterSolstice.format('YYYY-MM-DD'),
-                    now.format('YYYY-MM-DD'),
+                     winterEnd.format('YYYY-MM-DD'),
                     WINTER_GUISHOU_CODES,
                     WINTER_GUISHOU_NOTE_PATTERNS
                 ]
             );
             if (parseInt(rows[0].count, 10) >= 27) {
-                const badge = await awardBadge(telegramUserId, 'seasonal_winter_27', currentYear, locale);
+                const badge = await awardBadge(telegramUserId, 'seasonal_winter_27', winterStartYear, locale);
                 if (badge) unlocked.push(badge);
             }
         }
@@ -262,7 +291,7 @@ export const evaluateTelegramBadges = async (telegramUserId: number, selectedMet
             if (requiredLeafCodes.length === 0) continue;
             if (!requiredLeafCodes.every((code) => selectedCodeSet.has(code))) continue;
 
-            const badge = await awardBadge(telegramUserId, combo.badgeId, currentYear, locale);
+            const badge = await awardBadge(telegramUserId, combo.badgeId, targetYear, locale);
             if (badge) unlocked.push(badge);
         }
     }

@@ -1,11 +1,10 @@
-import moment from 'moment-timezone';
 import { db } from '../db';
 import { TelegramWebAppUser } from '../utils/telegramWebApp';
 import { PracticeMethod, getPracticeMethodRows, buildPracticeMethodTree } from './taxonomy';
 import { normalizeSelectedLeafIds } from './taxonomy';
 import { Locale, methodName, normalizeLocale } from '../i18n';
+import { getPracticeTimezoneSettings, validateCheckinDate } from './practiceTimezone';
 
-const TIMEZONE = 'Asia/Taipei';
 export const MAX_PRACTICE_NOTE_LENGTH = 2100;
 
 export interface TodayCheckinResponse {
@@ -16,6 +15,8 @@ export interface TodayCheckinResponse {
     practiceNote: string;
     reflectionNote: string;
     bodyFeelingNote: string;
+    entryKind: 'regular' | 'makeup';
+    practiceTimezone: string;
 }
 
 export const upsertTelegramUser = async (user: TelegramWebAppUser) => {
@@ -43,25 +44,33 @@ export const getPracticeMethods = async (): Promise<PracticeMethod[]> => {
     return buildPracticeMethodTree(await getPracticeMethodRows());
 };
 
-export const getTodayCheckin = async (telegramUserId: number, locale: Locale = 'zh_TW'): Promise<TodayCheckinResponse> => {
-    const today = moment().tz(TIMEZONE).format('YYYY-MM-DD');
+export const getCheckinForDate = async (
+    telegramUserId: number,
+    checkinDate: string,
+    locale: Locale = 'zh_TW'
+): Promise<TodayCheckinResponse> => {
+    const settings = await getPracticeTimezoneSettings(telegramUserId);
+    const target = validateCheckinDate(checkinDate, settings);
+    if (!settings.confirmed && target.entryKind === 'makeup') throw new Error('Confirm your practice timezone before making up yesterday');
 
     const { rows } = await db.queryWithRetry(
-        `SELECT id, practice_note, reflection_note, body_feeling_note
+        `SELECT id, practice_note, reflection_note, body_feeling_note, entry_kind, practice_timezone
          FROM telegram_checkin_logs
          WHERE telegram_user_id = $1 AND checkin_date = $2`,
-        [telegramUserId, today]
+        [telegramUserId, target.checkinDate]
     );
 
     if (rows.length === 0) {
         return {
-            date: today,
+            date: target.checkinDate,
             alreadyCheckedIn: false,
             checkinLogId: null,
             selectedMethodIds: [],
             practiceNote: '',
             reflectionNote: '',
-            bodyFeelingNote: ''
+            bodyFeelingNote: '',
+            entryKind: target.entryKind,
+            practiceTimezone: settings.practiceTimezone
         };
     }
 
@@ -77,19 +86,26 @@ export const getTodayCheckin = async (telegramUserId: number, locale: Locale = '
 
     const practiceNote = checkin.practice_note || mergeLegacyPracticeNotes(checkin.reflection_note, checkin.body_feeling_note, locale);
     return {
-        date: today,
+        date: target.checkinDate,
         alreadyCheckedIn: true,
         checkinLogId: checkin.id,
         selectedMethodIds: normalizeSelectedLeafIds(selected.rows.map((r) => r.practice_method_id), practiceMethodRows),
         practiceNote,
         reflectionNote: practiceNote,
-        bodyFeelingNote: ''
+        bodyFeelingNote: '',
+        entryKind: checkin.entry_kind === 'makeup' ? 'makeup' : 'regular',
+        practiceTimezone: checkin.practice_timezone || settings.practiceTimezone
     };
 };
 
-export const mergeLegacyPracticeNotes = (reflectionNote = '', bodyFeelingNote = '', _locale: Locale = 'zh_TW') => {
-    const reflection = reflectionNote.trim();
-    const bodyFeeling = bodyFeelingNote.trim();
+export const getTodayCheckin = async (telegramUserId: number, locale: Locale = 'zh_TW') => {
+    const settings = await getPracticeTimezoneSettings(telegramUserId);
+    return getCheckinForDate(telegramUserId, settings.today, locale);
+};
+
+export const mergeLegacyPracticeNotes = (reflectionNote: string | null = '', bodyFeelingNote: string | null = '', _locale: Locale = 'zh_TW') => {
+    const reflection = (reflectionNote || '').trim();
+    const bodyFeeling = (bodyFeelingNote || '').trim();
     if (!reflection || !bodyFeeling) return reflection || bodyFeeling;
     return `${reflection}\n${bodyFeeling}`;
 };
@@ -106,7 +122,13 @@ export const buildLegacyNote = (methodNames: string[], practiceNote = '', locale
     return parts.join('；');
 };
 
-export const saveTodayCheckin = async (telegramUserId: number, methodIds: number[], practiceNote: string, locale: Locale = 'zh_TW') => {
+export const saveCheckin = async (
+    telegramUserId: number,
+    methodIds: number[],
+    practiceNote: string,
+    checkinDate: unknown,
+    locale: Locale = 'zh_TW'
+) => {
     if (methodIds.length === 0) {
         throw new Error('At least one practice method must be selected');
     }
@@ -115,11 +137,17 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         throw new Error(`Practice note must be ${MAX_PRACTICE_NOTE_LENGTH} characters or fewer`);
     }
 
-    const today = moment().tz(TIMEZONE).format('YYYY-MM-DD');
+    const settings = await getPracticeTimezoneSettings(telegramUserId);
+    const target = validateCheckinDate(checkinDate, settings);
+    if (!settings.confirmed && target.entryKind === 'makeup') throw new Error('Confirm your practice timezone before making up yesterday');
     const client = await db.getClient();
 
     try {
         await client.query('BEGIN');
+        await client.query(
+            'SELECT pg_advisory_xact_lock(hashtext($1::text), $2::int)',
+            [String(telegramUserId), Number(target.checkinDate.replaceAll('-', ''))]
+        );
 
         const methodRows = await client.query(
             `SELECT id, code, name_zh, name_zh_cn, name_en, method_type
@@ -146,29 +174,34 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         const note = buildLegacyNote(legacyMethodNames, normalizedPracticeNote, locale);
 
         const existing = await client.query(
-            `SELECT id
+            `SELECT id, entry_kind, practice_timezone
              FROM telegram_checkin_logs
              WHERE telegram_user_id = $1 AND checkin_date = $2`,
-            [telegramUserId, today]
+            [telegramUserId, target.checkinDate]
         );
 
         let checkinLogId: number;
         let alreadyCheckedIn = false;
+        let entryKind = target.entryKind;
+        let practiceTimezone = settings.practiceTimezone;
 
         if (existing.rows.length > 0) {
             alreadyCheckedIn = true;
             checkinLogId = existing.rows[0].id;
+            entryKind = existing.rows[0].entry_kind === 'makeup' ? 'makeup' : 'regular';
+            practiceTimezone = existing.rows[0].practice_timezone || practiceTimezone;
 
             await client.query(
                  `UPDATE telegram_checkin_logs
                  SET practice_note = $1,
                      reflection_note = $1,
                      body_feeling_note = NULL,
-                     note = $2,
-                     source = 'webapp',
+                      note = $2,
+                      source = 'webapp',
+                      practice_timezone = COALESCE(practice_timezone, $4),
                      updated_at = CURRENT_TIMESTAMP
-                 WHERE id = $3`,
-                [normalizedPracticeNote || null, note || null, checkinLogId]
+                  WHERE id = $3`,
+                [normalizedPracticeNote || null, note || null, checkinLogId, practiceTimezone]
             );
 
             await client.query(
@@ -178,10 +211,11 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
             );
         } else {
             const inserted = await client.query(
-                `INSERT INTO telegram_checkin_logs (telegram_user_id, checkin_date, practice_note, reflection_note, body_feeling_note, note, source)
-                 VALUES ($1, $2, $3, $3, NULL, $4, 'webapp')
+                `INSERT INTO telegram_checkin_logs
+                    (telegram_user_id, checkin_date, practice_note, reflection_note, body_feeling_note, note, source, entry_kind, practice_timezone)
+                 VALUES ($1, $2, $3, $3, NULL, $4, 'webapp', $5, $6)
                  RETURNING id`,
-                [telegramUserId, today, normalizedPracticeNote || null, note || null]
+                [telegramUserId, target.checkinDate, normalizedPracticeNote || null, note || null, target.entryKind, settings.practiceTimezone]
             );
             checkinLogId = inserted.rows[0].id;
         }
@@ -198,11 +232,13 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         await client.query('COMMIT');
 
         return {
-            date: today,
+            date: target.checkinDate,
             checkinLogId,
             alreadyCheckedIn,
             selectedMethods: methodNames,
-            selectedMethodCodes: methodRows.rows.map((row) => row.code)
+            selectedMethodCodes: methodRows.rows.map((row) => row.code),
+            entryKind,
+            practiceTimezone
         };
     } catch (error) {
         await client.query('ROLLBACK');
@@ -211,3 +247,6 @@ export const saveTodayCheckin = async (telegramUserId: number, methodIds: number
         client.release();
     }
 };
+
+export const saveTodayCheckin = async (telegramUserId: number, methodIds: number[], practiceNote: string, locale: Locale = 'zh_TW') =>
+    saveCheckin(telegramUserId, methodIds, practiceNote, undefined, locale);

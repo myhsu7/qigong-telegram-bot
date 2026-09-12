@@ -12,7 +12,8 @@
     "test:i18n": "tsx tests/i18n.test.ts",
     "test:practice-note": "tsx tests/practiceNote.test.ts",
     "test:practice-method-cache": "tsx tests/practiceMethodCache.test.ts",
-    "test": "npm run test:error-details && npm run test:network && npm run test:sanfu && npm run test:i18n && npm run test:practice-note && npm run test:practice-method-cache",
+    "test:makeup-checkin": "tsx tests/makeupCheckin.test.ts",
+    "test": "npm run test:error-details && npm run test:network && npm run test:sanfu && npm run test:i18n && npm run test:practice-note && npm run test:practice-method-cache && npm run test:makeup-checkin",
     "start": "node dist/index.js"
   },
   "repository": {

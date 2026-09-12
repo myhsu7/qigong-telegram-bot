@@ -39,6 +39,7 @@
     .entry-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
     .entry-date { font-weight:700; font-size:16px; }
     .entry-weekday { color:#6b7280; font-size:13px; margin-top:4px; }
+    .makeup-label { display:inline-flex; margin-top:6px; padding:3px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:12px; font-weight:700;}
     .group-tag { background:#ede9fe; color:#6d28d9; }
     .leaf-tag { background:#ecfeff; color:#0f766e; }
     .tag-group { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -110,9 +111,9 @@
     if (tg) { tg.ready(); tg.expand(); }
     const initData = tg?.initData || '';
     const translations = {
-      zh_TW: { title:'我的成就', language:'語言', heading:'🏮 我的修練', subtitle:'查看你的境界、勳章與每月打卡記錄。', achievementsTab:'成就總覽', historyTab:'歷史記錄', badgesHeading:'🏆 榮譽勳章', badgeEmpty:'目前還沒有勳章，持續打卡很快就會有第一枚成就！', prevMonth:'← 上個月', nextMonth:'下個月 →', loading:'載入中...', historySubtitle:'每月打卡摘要與功法分組', badgeHistory:'勳章紀錄', historyBadgesEmpty:'目前還沒有勳章，繼續累積打卡吧。', historyHeading:'📜 打卡記錄', historyEmpty:'這個月份還沒有打卡記錄。', currentLevel:'【當前境界】', milestone:(title,n,unit)=>`距離 ${title} 還差 ${n} ${unit}`, maxLevel:'你已達到目前最高等級，持續精進！', currentStreak:'目前連續打卡', longestStreak:'最長連續打卡', totalCheckins:'總打卡天數', lastCheckin:'最近打卡日期', monthCheckins:'本月打卡天數', cumulativeCheckins:'累計總打卡', days:(n)=>`${n} 天`, practiceNote:'心得與感受', weekdays:['週日','週一','週二','週三','週四','週五','週六'], authError:'請從 Telegram App 內開啟成就頁。', requestFailed:'請求失敗', loadFailed:'載入失敗：' },
-      zh_CN: { title:'我的成就', language:'语言', heading:'🏮 我的修炼', subtitle:'查看你的境界、勋章与每月打卡记录。', achievementsTab:'成就总览', historyTab:'历史记录', badgesHeading:'🏆 荣誉勋章', badgeEmpty:'目前还没有勋章，持续打卡很快就会有第一枚成就！', prevMonth:'← 上个月', nextMonth:'下个月 →', loading:'加载中...', historySubtitle:'每月打卡摘要与功法分组', badgeHistory:'勋章记录', historyBadgesEmpty:'目前还没有勋章，继续累积打卡吧。', historyHeading:'📜 打卡记录', historyEmpty:'这个月份还没有打卡记录。', currentLevel:'【当前境界】', milestone:(title,n,unit)=>`距离 ${title} 还差 ${n} ${unit}`, maxLevel:'你已达到目前最高等级，继续精进！', currentStreak:'目前连续打卡', longestStreak:'最长连续打卡', totalCheckins:'总打卡天数', lastCheckin:'最近打卡日期', monthCheckins:'本月打卡天数', cumulativeCheckins:'累计总打卡', days:(n)=>`${n} 天`, practiceNote:'心得与感受', weekdays:['周日','周一','周二','周三','周四','周五','周六'], authError:'请从 Telegram App 内打开成就页。', requestFailed:'请求失败', loadFailed:'加载失败：' },
-      en: { title:'My Achievements', language:'Language', heading:'🏮 My Practice', subtitle:'View your level, badges, and monthly check-in history.', achievementsTab:'Achievements', historyTab:'History', badgesHeading:'🏆 Honor Badges', badgeEmpty:'No badges yet. Keep checking in to earn your first achievement!', prevMonth:'← Previous', nextMonth:'Next →', loading:'Loading...', historySubtitle:'Monthly check-in summary and method groups', badgeHistory:'Badge History', historyBadgesEmpty:'No badges yet. Keep building your check-in record.', historyHeading:'📜 Check-in History', historyEmpty:'No check-ins in this month.', currentLevel:'Current level: ', milestone:(title,n,unit)=>`${n} ${unit} until ${title}`, maxLevel:'You have reached the highest current level. Keep progressing!', currentStreak:'Current streak', longestStreak:'Longest streak', totalCheckins:'Total check-in days', lastCheckin:'Latest check-in', monthCheckins:'Check-in days this month', cumulativeCheckins:'All-time check-ins', days:(n)=>`${n} ${Number(n) === 1 ? 'day' : 'days'}`, practiceNote:'Reflection and Sensations', weekdays:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], authError:'Please open Achievements in the Telegram app.', requestFailed:'Request failed', loadFailed:'Could not load: ' }
+      zh_TW: { title:'我的成就', language:'語言', heading:'🏮 我的修練', subtitle:'查看你的境界、勳章與每月打卡記錄。', achievementsTab:'成就總覽', historyTab:'歷史記錄', badgesHeading:'🏆 榮譽勳章', badgeEmpty:'目前還沒有勳章，持續打卡很快就會有第一枚成就！', prevMonth:'← 上個月', nextMonth:'下個月 →', loading:'載入中...', historySubtitle:'每月打卡摘要與功法分組', badgeHistory:'勳章紀錄', historyBadgesEmpty:'目前還沒有勳章，繼續累積打卡吧。', historyHeading:'📜 打卡記錄', historyEmpty:'這個月份還沒有打卡記錄。', currentLevel:'【當前境界】', milestone:(title,n,unit)=>`距離 ${title} 還差 ${n} ${unit}`, maxLevel:'你已達到目前最高等級，持續精進！', currentStreak:'目前連續打卡', longestStreak:'最長連續打卡', totalCheckins:'總打卡天數', lastCheckin:'最近打卡日期', monthCheckins:'本月打卡天數', cumulativeCheckins:'累計總打卡', days:(n)=>`${n} 天`, practiceNote:'心得與感受', makeup:'補登', recordedAt:'補登時間', weekdays:['週日','週一','週二','週三','週四','週五','週六'], authError:'請從 Telegram App 內開啟成就頁。', requestFailed:'請求失敗', loadFailed:'載入失敗：' },
+      zh_CN: { title:'我的成就', language:'语言', heading:'🏮 我的修炼', subtitle:'查看你的境界、勋章与每月打卡记录。', achievementsTab:'成就总览', historyTab:'历史记录', badgesHeading:'🏆 荣誉勋章', badgeEmpty:'目前还没有勋章，持续打卡很快就会有第一枚成就！', prevMonth:'← 上个月', nextMonth:'下个月 →', loading:'加载中...', historySubtitle:'每月打卡摘要与功法分组', badgeHistory:'勋章记录', historyBadgesEmpty:'目前还没有勋章，继续累积打卡吧。', historyHeading:'📜 打卡记录', historyEmpty:'这个月份还没有打卡记录。', currentLevel:'【当前境界】', milestone:(title,n,unit)=>`距离 ${title} 还差 ${n} ${unit}`, maxLevel:'你已达到目前最高等级，继续精进！', currentStreak:'目前连续打卡', longestStreak:'最长连续打卡', totalCheckins:'总打卡天数', lastCheckin:'最近打卡日期', monthCheckins:'本月打卡天数', cumulativeCheckins:'累计总打卡', days:(n)=>`${n} 天`, practiceNote:'心得与感受', makeup:'补登', recordedAt:'补登时间', weekdays:['周日','周一','周二','周三','周四','周五','周六'], authError:'请从 Telegram App 内打开成就页。', requestFailed:'请求失败', loadFailed:'加载失败：' },
+      en: { title:'My Achievements', language:'Language', heading:'🏮 My Practice', subtitle:'View your level, badges, and monthly check-in history.', achievementsTab:'Achievements', historyTab:'History', badgesHeading:'🏆 Honor Badges', badgeEmpty:'No badges yet. Keep checking in to earn your first achievement!', prevMonth:'← Previous', nextMonth:'Next →', loading:'Loading...', historySubtitle:'Monthly check-in summary and method groups', badgeHistory:'Badge History', historyBadgesEmpty:'No badges yet. Keep building your check-in record.', historyHeading:'📜 Check-in History', historyEmpty:'No check-ins in this month.', currentLevel:'Current level: ', milestone:(title,n,unit)=>`${n} ${unit} until ${title}`, maxLevel:'You have reached the highest current level. Keep progressing!', currentStreak:'Current streak', longestStreak:'Longest streak', totalCheckins:'Total check-in days', lastCheckin:'Latest check-in', monthCheckins:'Check-in days this month', cumulativeCheckins:'All-time check-ins', days:(n)=>`${n} ${Number(n) === 1 ? 'day' : 'days'}`, practiceNote:'Reflection and Sensations', makeup:'Make-up', recordedAt:'Recorded at', weekdays:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], authError:'Please open Achievements in the Telegram app.', requestFailed:'Request failed', loadFailed:'Could not load: ' }
     };
     const localeKey = 'qigong_telegram_locale';
     const mapLocale = (code) => ['zh-hans','zh-cn','zh-sg'].includes(String(code).toLowerCase()) ? 'zh_CN' : (/^en(?:-|$)/i.test(String(code)) ? 'en' : 'zh_TW');
@@ -122,13 +123,7 @@
     const currentTab = { value: 'achievements' };
     const historyState = { month: null, loaded: false };
     let profileReady = false;
-
-    const currentMonthText = (() => {
-      const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
-      const year = parts.find((part) => part.type === 'year')?.value || '0000';
-      const month = parts.find((part) => part.type === 'month')?.value || '01';
-      return `${year}-${month}`;
-    })();
+    let currentMonthText = new Date().toISOString().slice(0, 7);
 
     const escapeHtml = (value) => String(value || '')
       .replace(/&/g, '&amp;')
@@ -280,12 +275,16 @@
         const noteHtml = practiceNote
           ? `<div class="note-block"><div class="note-label">${t.practiceNote}</div><div>${escapeHtml(practiceNote)}</div></div>`
           : '';
+        const makeupHtml = entry.entryKind === 'makeup'
+          ? `<div class="makeup-label">${t.makeup}</div><div class="entry-weekday">${t.recordedAt}: ${escapeHtml(new Intl.DateTimeFormat(locale === 'en' ? 'en' : locale === 'zh_CN' ? 'zh-CN' : 'zh-TW', { dateStyle:'medium', timeStyle:'short', timeZone:entry.practiceTimezone }).format(new Date(entry.recordedAt)))}</div>`
+          : '';
 
         card.innerHTML = `
           <div class="entry-head">
             <div>
               <div class="entry-date">${escapeHtml(entry.date)}</div>
               <div class="entry-weekday">${escapeHtml(getWeekdayLabel(entry.date))}</div>
+              ${makeupHtml}
             </div>
           </div>
           <div class="tag-group">${groupedTags}</div>
@@ -373,6 +372,7 @@
         if (initData) {
           const profile = await apiFetch('/telegram/api/webapp/profile', {}, false);
           if (translations[profile.locale]) locale = profile.locale;
+          if (profile.today) currentMonthText = profile.today.slice(0, 7);
           localStorage.setItem(localeKey, locale);
           applyTranslations();
         }

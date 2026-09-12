@@ -104,7 +104,7 @@ const getDisplayName = (row: { first_name?: string | null; last_name?: string | 
     return 'Unknown';
 };
 
-export const getUserStats = async (telegramUserId: number): Promise<UserStats> => {
+export const getUserStats = async (telegramUserId: number, practiceTimezone = TIMEZONE): Promise<UserStats> => {
     const { rows } = await db.query(
         `SELECT checkin_date
          FROM telegram_checkin_logs
@@ -113,7 +113,7 @@ export const getUserStats = async (telegramUserId: number): Promise<UserStats> =
         [telegramUserId]
     );
 
-    const dates = rows.map((r) => moment.tz(r.checkin_date, 'YYYY-MM-DD', TIMEZONE));
+    const dates = rows.map((r) => moment.tz(r.checkin_date, 'YYYY-MM-DD', practiceTimezone));
     if (dates.length === 0) {
         return {
             totalCheckins: 0,
@@ -134,7 +134,7 @@ export const getUserStats = async (telegramUserId: number): Promise<UserStats> =
         }
     }
 
-    const today = moment().tz(TIMEZONE).startOf('day');
+    const today = moment().tz(practiceTimezone).startOf('day');
     const yesterday = today.clone().subtract(1, 'day');
     let currentStreak = 0;
     let cursor = dates.length - 1;
@@ -266,6 +266,11 @@ export const getLeaderboard = async (period: LeaderboardPeriod) => {
         .finally(() => leaderboardRequests.delete(period));
     leaderboardRequests.set(period, request);
     return request;
+};
+
+export const invalidateLeaderboardCache = () => {
+    leaderboardCache.clear();
+    leaderboardRequests.clear();
 };
 
 export const getOverviewStats = async (period: Exclude<LeaderboardPeriod, 'all'>, anchorDate?: string) => {

@@ -21,6 +21,7 @@ import {
     registerTelegramGroup,
 } from '../services/groupOperations';
 import { serializeError } from '../errorDetails';
+import { getPracticeTimezoneSettings } from '../services/practiceTimezone';
 
 export const bot = new Bot(env.telegramBotToken);
 
@@ -143,7 +144,8 @@ bot.command('chickin', async (ctx) => {
 bot.command('mystats', async (ctx) => {
     const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
-    const stats = await getUserStats(ctx.from.id);
+    const timezone = (await getPracticeTimezoneSettings(ctx.from.id)).practiceTimezone;
+    const stats = await getUserStats(ctx.from.id, timezone);
     await ctx.reply(await buildEnhancedUserStatsMessage(ctx.from.id, stats, locale));
 });
 
@@ -203,7 +205,8 @@ bot.command('yearly', async (ctx) => {
 bot.command('method30', async (ctx) => {
     const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
-    const result = await getUserMethodMix(ctx.from.id, 30, locale);
+    const timezone = (await getPracticeTimezoneSettings(ctx.from.id)).practiceTimezone;
+    const result = await getUserMethodMix(ctx.from.id, 30, locale, timezone);
     const review = await generateMethodReviewWithLlm(result, buildMethodReview(result, locale), ctx.from.id, locale);
     const keyboard = new InlineKeyboard().webApp(privateText[locale].fullAnalysisButton, env.telegramMethodAnalysisWebappUrl);
     const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;
@@ -213,7 +216,8 @@ bot.command('method30', async (ctx) => {
 bot.command('method90', async (ctx) => {
     const locale = privateUserLocale(ctx, await ensureUser(ctx));
     if (!ctx.from) return;
-    const result = await getUserMethodMix(ctx.from.id, 90, locale);
+    const timezone = (await getPracticeTimezoneSettings(ctx.from.id)).practiceTimezone;
+    const result = await getUserMethodMix(ctx.from.id, 90, locale, timezone);
     const review = await generateMethodReviewWithLlm(result, buildMethodReview(result, locale), ctx.from.id, locale);
     const keyboard = new InlineKeyboard().webApp(privateText[locale].fullAnalysisButton, env.telegramMethodAnalysisWebappUrl);
     const options = ctx.chat?.type === 'private' ? { reply_markup: keyboard } : undefined;

@@ -1,7 +1,7 @@
 import { Request, Router } from 'express';
 import { verifyTelegramWebAppInitData } from '../utils/telegramWebApp';
-import { getPracticeMethods, getTodayCheckin, mergeLegacyPracticeNotes, saveTodayCheckin, upsertTelegramUser } from '../services/checkin';
-import { getLeaderboard, getLevelTitle, getUserStats, LeaderboardPeriod } from '../services/stats';
+import { getCheckinForDate, getPracticeMethods, getTodayCheckin, mergeLegacyPracticeNotes, saveCheckin, upsertTelegramUser } from '../services/checkin';
+import { getLeaderboard, getLevelTitle, getUserStats, invalidateLeaderboardCache, LeaderboardPeriod } from '../services/stats';
 import { evaluateTelegramBadges } from '../services/badges';
 import { getUserBadges } from '../services/badges';
 import { sendTelegramCheckinSummary } from '../services/chatSummary';
@@ -13,6 +13,7 @@ import { setTelegramUserLocale } from '../services/language';
 import { TelegramWebAppUser } from '../utils/telegramWebApp';
 import { syncPrivateCommandMenu } from '../bot/telegram';
 import { getPracticeFeelingTags } from '../services/practiceFeelingTags';
+import { getPracticeTimezoneSettings, updatePracticeTimezone } from '../services/practiceTimezone';
 
 const router = Router();
 
@@ -27,11 +28,34 @@ const resolveUserLocale = async (req: Request, user: TelegramWebAppUser): Promis
 };
 
 router.get('/profile', async (req, res) => {
+    let auth: ReturnType<typeof verifyTelegramWebAppInitData>;
     try {
-        const auth = verifyTelegramWebAppInitData(resolveInitData(req));
-        res.json({ locale: await upsertTelegramUser(auth.user) });
+        auth = verifyTelegramWebAppInitData(resolveInitData(req));
     } catch (error) {
-        res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+        return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    }
+    try {
+        const locale = await upsertTelegramUser(auth.user);
+        res.json({ locale, ...(await getPracticeTimezoneSettings(auth.user.id)) });
+    } catch (error) {
+        console.error('[api] failed to load profile', error);
+        res.status(500).json({ error: 'Failed to load profile' });
+    }
+});
+
+router.patch('/profile/practice-timezone', async (req, res) => {
+    let auth: ReturnType<typeof verifyTelegramWebAppInitData>;
+    try {
+        auth = verifyTelegramWebAppInitData(resolveInitData(req));
+    } catch (error) {
+        return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    }
+    try {
+        await upsertTelegramUser(auth.user);
+        res.json(await updatePracticeTimezone(auth.user.id, req.body?.timezone));
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update practice timezone';
+        res.status(message.includes('timezone') || message.includes('24 hours') ? 400 : 500).json({ error: message });
     }
 });
 
@@ -89,6 +113,26 @@ router.get('/checkin/today', async (req, res) => {
     }
 });
 
+router.get('/checkin', async (req, res) => {
+    let auth: ReturnType<typeof verifyTelegramWebAppInitData>;
+    try {
+        auth = verifyTelegramWebAppInitData(resolveInitData(req));
+    } catch (error) {
+        return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    }
+    try {
+        const locale = await resolveUserLocale(req, auth.user);
+        const settings = await getPracticeTimezoneSettings(auth.user.id);
+        const requestedDate = typeof req.query.date === 'string' ? req.query.date : settings.today;
+        const data = await getCheckinForDate(auth.user.id, requestedDate, locale);
+        res.json(data);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load check-in';
+        console.error('[api] failed to load dated checkin', error);
+        res.status(message.includes('date') || message.includes('window') || message.includes('eligible') || message.includes('timezone') ? 400 : 500).json({ error: message });
+    }
+});
+
 router.post('/checkin', async (req, res) => {
     try {
         const initData = resolveInitData(req);
@@ -110,11 +154,14 @@ router.post('/checkin', async (req, res) => {
                 locale
             );
 
-        const saved = await saveTodayCheckin(auth.user.id, methodIds, practiceNote, locale);
-        const unlockedBadges = await evaluateTelegramBadges(auth.user.id, saved.selectedMethodCodes, locale);
-        const stats = await getUserStats(auth.user.id);
+        const saved = await saveCheckin(auth.user.id, methodIds, practiceNote, req.body?.checkinDate, locale);
+        const unlockedBadges = await evaluateTelegramBadges(auth.user.id, saved.selectedMethodCodes, locale, saved);
+        const stats = await getUserStats(auth.user.id, saved.practiceTimezone);
+        invalidateLeaderboardCache();
         try {
             await sendTelegramCheckinSummary(auth.user.id, {
+                date: saved.date,
+                entryKind: saved.entryKind,
                 selectedMethods: saved.selectedMethods,
                 stats,
                 unlockedBadges
@@ -136,7 +183,8 @@ router.get('/history', async (req, res) => {
         const locale = await resolveUserLocale(req, auth.user);
 
         const monthParam = typeof req.query.month === 'string' ? req.query.month : undefined;
-        const data = await getTelegramHistory(auth.user.id, monthParam, locale);
+        const timezone = (await getPracticeTimezoneSettings(auth.user.id)).practiceTimezone;
+        const data = await getTelegramHistory(auth.user.id, monthParam, locale, timezone);
         res.json(data);
     } catch (error) {
         console.error('[api] failed to load history', error);
@@ -150,7 +198,8 @@ router.get('/achievements', async (req, res) => {
         const auth = verifyTelegramWebAppInitData(initData);
         const locale = await resolveUserLocale(req, auth.user);
 
-        const stats = await getUserStats(auth.user.id);
+        const timezone = (await getPracticeTimezoneSettings(auth.user.id)).practiceTimezone;
+        const stats = await getUserStats(auth.user.id, timezone);
         const badges = await getUserBadges(auth.user.id, locale);
         const levelTitle = getLevelTitle(stats.totalCheckins, locale);
 
@@ -216,8 +265,8 @@ router.get('/method-analysis', async (req, res) => {
     try {
         const locale = await resolveUserLocale(req, auth.user);
         const [analysis30, analysis90, journal] = await Promise.all([
-            getUserMethodMix(auth.user.id, 30, locale),
-            getUserMethodMix(auth.user.id, 90, locale),
+            getPracticeTimezoneSettings(auth.user.id).then((settings) => getUserMethodMix(auth.user.id, 30, locale, settings.practiceTimezone)),
+            getPracticeTimezoneSettings(auth.user.id).then((settings) => getUserMethodMix(auth.user.id, 90, locale, settings.practiceTimezone)),
             getUserPracticeJournal(auth.user.id, 12, locale)
         ]);
         const [reviewText30, reviewText90] = await Promise.all([

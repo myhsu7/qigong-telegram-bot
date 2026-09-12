@@ -35,30 +35,51 @@
     .success { color: #166534; }
     .language-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .language-select { width: auto; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #1f2937; padding: 8px 10px; font-size: 14px; }
+    .timezone-card { border: 1px solid #bfdbfe; }
+    .timezone-row { display: flex; gap: 8px; align-items: center; }
+    .timezone-input { flex: 1; min-width: 0; border: 1px solid #d1d5db; border-radius: 10px; padding: 11px; font-size: 14px; }
+    .timezone-button { width: auto; padding: 11px 14px; }
+    .date-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .date-tab { background: #e5e7eb; color: #374151; }
+    .date-tab.active { background: #0d6efd; color: #fff; }
+    .date-tab.makeup.active { background: #b45309; }
+    .makeup-hint { margin: 10px 0 0; color: #92400e; }
+    .makeup-mode { border: 2px solid #f59e0b; }
+    @media (max-width: 480px) { .timezone-row { align-items: stretch; flex-direction: column; } .timezone-button { width: 100%; } .date-tabs { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="language-row"><select id="languageSelect" class="language-select" aria-label="語言"><option value="zh_TW">繁體中文</option><option value="zh_CN">简体中文</option><option value="en">English</option></select></div>
+       <div id="timezoneCard" class="card timezone-card" hidden>
+      <h2 data-i18n="timezoneHeading">設定練功時區</h2>
+      <p class="muted" data-i18n="timezoneIntro">練功日期與補登期限會依此時區計算，請確認後再打卡。</p>
+      <div class="timezone-row"><input id="timezoneInput" class="timezone-input" list="timezoneOptions" autocomplete="off"><button id="saveTimezone" class="timezone-button" type="button" data-i18n="confirmTimezone">確認時區</button></div>
+      <datalist id="timezoneOptions"><option value="Asia/Taipei"><option value="Asia/Hong_Kong"><option value="Asia/Singapore"><option value="Asia/Tokyo"><option value="Europe/London"><option value="Europe/Paris"><option value="America/New_York"><option value="America/Chicago"><option value="America/Denver"><option value="America/Los_Angeles"><option value="Australia/Sydney"></datalist>
+      <div id="timezoneStatus" class="status"></div>
+    </div>
     <div class="card">
       <h1 data-i18n="heading">今日打卡</h1>
       <p class="muted" data-i18n="intro">請勾選今天練習的功法，並可選填練功心得與感受。</p>
+      <p class="muted"><span id="timezoneLabel"></span> <button id="changeTimezone" class="timezone-button" type="button">變更</button></p>
+      <div id="dateTabs" class="date-tabs" hidden><button id="todayTab" class="date-tab active" type="button"></button><button id="makeupTab" class="date-tab makeup" type="button"></button></div>
+      <p id="makeupHint" class="muted makeup-hint"></p>
       <div class="hint" id="todayStatus"></div>
     </div>
 
-    <div class="card">
+    <div id="methodsCard" class="card" hidden>
       <h2 data-i18n="methodsHeading">今日功法（可複選）</h2>
       <div id="methodsContainer"></div>
     </div>
 
-    <div class="card">
+    <div id="noteCard" class="card" hidden>
       <h2 data-i18n="practiceNoteHeading">練功心得與身體感受（選填）</h2>
       <textarea id="practiceNote" maxlength="1000"></textarea>
       <p id="feelingTagsHint" class="muted feeling-hint" data-i18n="feelingTagsHint" hidden>快速選擇感受（可複選）</p>
       <div id="feelingTags" class="feeling-tags"></div>
     </div>
 
-    <button type="button" id="submitButton" data-i18n="submit">完成打卡</button>
+    <button type="button" id="submitButton" data-i18n="submit" hidden>完成打卡</button>
     <div id="submitStatus" class="status"></div>
   </div>
 
@@ -71,13 +92,13 @@
 
     const translations = {
       zh_TW: {
-        title: '氣功打卡', language: '語言', heading: '今日打卡', intro: '請勾選今天練習的功法，並可選填練功心得與感受。', loadingToday: '正在載入今日打卡資料...', methodsHeading: '今日功法（可複選）', practiceNoteHeading: '練功心得與身體感受（選填）', feelingTagsHint: '快速選擇感受（可複選）', practiceNotePlaceholder: '記錄今天練功的心得、身體感受或其他體會...', submit: '完成打卡', selectAllChildren: '勾選即全選子招式', authError: '尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。', requestFailed: '請求失敗', methodsLoadFailed: '功法列表載入失敗：', feelingTagsLoadFailed: '快速感受標籤載入失敗：', todayLoadFailed: '今日打卡資料載入失敗：', noteTooLong: '心得與感受最多 1000 字，無法加入此標籤。', alreadyCheckedIn: '你今天已打卡，可修改今日內容後重新送出。', notCheckedIn: '今天尚未打卡，請完成以下內容後送出。', loadFailed: '載入失敗：', selectMethod: '請至少勾選一個功法。', saving: '正在儲存打卡資料...', streak: (n) => `連續 ${n} 天`, total: (n) => `總計 ${n} 天`, unlocked: '解鎖：', success: '打卡成功：', saved: '今天的打卡內容已儲存，你可以再次修改後重新送出。', saveFailed: '儲存失敗：'
+        title: '氣功打卡', language: '語言', heading: '練功打卡', intro: '請選擇練功日期與功法，並可選填心得與感受。', timezoneHeading: '設定練功時區', timezoneIntro: '練功日期與補登期限會依此時區計算，請確認後再打卡。', confirmTimezone: '確認時區', timezoneLabel: (z) => `練功時區：${z}`, timezoneSaved: '練功時區已儲存。', timezonePending: (z,d) => `新時區 ${z} 將於 ${d} 生效。`, timezoneSaveFailed: '時區儲存失敗：', todayTab: (d) => `今天 ${d}`, makeupTab: (d) => `補登昨天 ${d}`, makeupClosed: (d) => `昨天 ${d} 的補登期限已於當地中午 12:00 結束。`, makeupAvailable: '昨天若有練功，可於當地中午 12:00 前補登。', loadingToday: '正在載入打卡資料...', methodsHeading: '練習功法（可複選）', practiceNoteHeading: '練功心得與身體感受（選填）', feelingTagsHint: '快速選擇感受（可複選）', practiceNotePlaceholder: '記錄練功心得、身體感受或其他體會...', submitToday: (d) => `完成 ${d} 打卡`, submitMakeup: (d) => `完成 ${d} 補登`, selectAllChildren: '勾選即全選子招式', authError: '尚未取得 Telegram 驗證資訊，請從 Telegram App 內重新開啟打卡頁。', requestFailed: '請求失敗', methodsLoadFailed: '功法列表載入失敗：', feelingTagsLoadFailed: '快速感受標籤載入失敗：', todayLoadFailed: '打卡資料載入失敗：', noteTooLong: '心得與感受最多 1000 字，無法加入此標籤。', alreadyCheckedIn: (d) => `${d} 已打卡，可在期限內修改內容。`, notCheckedIn: (d,m) => m ? `${d} 尚未打卡，可於中午 12:00 前補登。` : `${d} 尚未打卡。`, loadFailed: '載入失敗：', selectMethod: '請至少勾選一個功法。', saving: '正在儲存打卡資料...', streak: (n) => `連續 ${n} 天`, total: (n) => `總計 ${n} 天`, unlocked: '解鎖：', successToday: (d) => `${d} 打卡成功：`, successMakeup: (d) => `${d} 補登成功：`, saved: (d,m) => `${d} 的${m ? '補登' : '打卡'}內容已儲存。`, saveFailed: '儲存失敗：'
       },
       zh_CN: {
-        title: '气功打卡', language: '语言', heading: '今日打卡', intro: '请选择今天练习的功法，并可选填练功心得与感受。', loadingToday: '正在加载今日打卡数据...', methodsHeading: '今日功法（可多选）', practiceNoteHeading: '练功心得与身体感受（选填）', feelingTagsHint: '快速选择感受（可多选）', practiceNotePlaceholder: '记录今天练功的心得、身体感受或其他体会...', submit: '完成打卡', selectAllChildren: '勾选即全选子招式', authError: '尚未取得 Telegram 验证信息，请从 Telegram App 内重新打开打卡页。', requestFailed: '请求失败', methodsLoadFailed: '功法列表加载失败：', feelingTagsLoadFailed: '快速感受标签加载失败：', todayLoadFailed: '今日打卡数据加载失败：', noteTooLong: '心得与感受最多 1000 字，无法加入此标签。', alreadyCheckedIn: '你今天已打卡，可修改今日内容后重新提交。', notCheckedIn: '今天尚未打卡，请完成以下内容后提交。', loadFailed: '加载失败：', selectMethod: '请至少选择一个功法。', saving: '正在保存打卡数据...', streak: (n) => `连续 ${n} 天`, total: (n) => `总计 ${n} 天`, unlocked: '解锁：', success: '打卡成功：', saved: '今天的打卡内容已保存，你可以再次修改后重新提交。', saveFailed: '保存失败：'
+        title: '气功打卡', language: '语言', heading: '练功打卡', intro: '请选择练功日期与功法，并可选填心得与感受。', timezoneHeading: '设置练功时区', timezoneIntro: '练功日期与补登期限会依此时区计算，请确认后再打卡。', confirmTimezone: '确认时区', timezoneLabel: (z) => `练功时区：${z}`, timezoneSaved: '练功时区已保存。', timezonePending: (z,d) => `新时区 ${z} 将于 ${d} 生效。`, timezoneSaveFailed: '时区保存失败：', todayTab: (d) => `今天 ${d}`, makeupTab: (d) => `补登昨天 ${d}`, makeupClosed: (d) => `昨天 ${d} 的补登期限已于当地中午 12:00 结束。`, makeupAvailable: '昨天若有练功，可于当地中午 12:00 前补登。', loadingToday: '正在加载打卡数据...', methodsHeading: '练习功法（可多选）', practiceNoteHeading: '练功心得与身体感受（选填）', feelingTagsHint: '快速选择感受（可多选）', practiceNotePlaceholder: '记录练功心得、身体感受或其他体会...', submitToday: (d) => `完成 ${d} 打卡`, submitMakeup: (d) => `完成 ${d} 补登`, selectAllChildren: '勾选即全选子招式', authError: '尚未取得 Telegram 验证信息，请从 Telegram App 内重新打开打卡页。', requestFailed: '请求失败', methodsLoadFailed: '功法列表加载失败：', feelingTagsLoadFailed: '快速感受标签加载失败：', todayLoadFailed: '打卡数据加载失败：', noteTooLong: '心得与感受最多 1000 字，无法加入此标签。', alreadyCheckedIn: (d) => `${d} 已打卡，可在期限内修改内容。`, notCheckedIn: (d,m) => m ? `${d} 尚未打卡，可于中午 12:00 前补登。` : `${d} 尚未打卡。`, loadFailed: '加载失败：', selectMethod: '请至少选择一个功法。', saving: '正在保存打卡数据...', streak: (n) => `连续 ${n} 天`, total: (n) => `总计 ${n} 天`, unlocked: '解锁：', successToday: (d) => `${d} 打卡成功：`, successMakeup: (d) => `${d} 补登成功：`, saved: (d,m) => `${d} 的${m ? '补登' : '打卡'}内容已保存。`, saveFailed: '保存失败：'
       },
       en: {
-        title: 'Qigong Check-in', language: 'Language', heading: 'Today’s Check-in', intro: 'Select the methods you practiced today. You may also add one practice note.', loadingToday: 'Loading today’s check-in...', methodsHeading: 'Today’s Methods (select all that apply)', practiceNoteHeading: 'Practice Reflection and Physical Sensations (optional)', feelingTagsHint: 'Quick sensations (select all that apply)', practiceNotePlaceholder: 'Record reflections, physical sensations, or anything else from today’s practice...', submit: 'Complete Check-in', selectAllChildren: 'Selects all child forms', authError: 'Telegram authentication is unavailable. Please reopen this page in the Telegram app.', requestFailed: 'Request failed', methodsLoadFailed: 'Could not load practice methods: ', feelingTagsLoadFailed: 'Could not load quick sensation tags: ', todayLoadFailed: 'Could not load today’s check-in: ', noteTooLong: 'The note is limited to 1,000 characters, so this tag cannot be added.', alreadyCheckedIn: 'You have checked in today. You can edit the details and submit again.', notCheckedIn: 'You have not checked in today. Complete the details below to continue.', loadFailed: 'Could not load data: ', selectMethod: 'Select at least one practice method.', saving: 'Saving your check-in...', streak: (n) => `${n}-day streak`, total: (n) => `${n} days total`, unlocked: 'Unlocked: ', success: 'Check-in successful: ', saved: 'Today’s check-in has been saved. You can edit and submit it again.', saveFailed: 'Could not save: '
+        title: 'Qigong Check-in', language: 'Language', heading: 'Practice Check-in', intro: 'Choose the practice date and methods. You may also add a reflection.', timezoneHeading: 'Set practice time zone', timezoneIntro: 'Practice dates and make-up deadlines use this time zone. Confirm it before checking in.', confirmTimezone: 'Confirm time zone', timezoneLabel: (z) => `Practice time zone: ${z}`, timezoneSaved: 'Practice time zone saved.', timezonePending: (z,d) => `${z} will take effect on ${d}.`, timezoneSaveFailed: 'Could not save time zone: ', todayTab: (d) => `Today · ${d}`, makeupTab: (d) => `Make up yesterday · ${d}`, makeupClosed: (d) => `The make-up window for ${d} closed at 12:00 PM local time.`, makeupAvailable: 'If you practiced yesterday, you can make it up before 12:00 PM local time.', loadingToday: 'Loading check-in...', methodsHeading: 'Practice Methods (select all that apply)', practiceNoteHeading: 'Practice Reflection and Physical Sensations (optional)', feelingTagsHint: 'Quick sensations (select all that apply)', practiceNotePlaceholder: 'Record reflections, physical sensations, or anything else you noticed...', submitToday: (d) => `Complete ${d} check-in`, submitMakeup: (d) => `Complete ${d} make-up`, selectAllChildren: 'Selects all child forms', authError: 'Telegram authentication is unavailable. Please reopen this page in the Telegram app.', requestFailed: 'Request failed', methodsLoadFailed: 'Could not load practice methods: ', feelingTagsLoadFailed: 'Could not load quick sensation tags: ', todayLoadFailed: 'Could not load check-in: ', noteTooLong: 'The note is limited to 1,000 characters, so this tag cannot be added.', alreadyCheckedIn: (d) => `${d} is already checked in and can be edited within the allowed window.`, notCheckedIn: (d,m) => m ? `${d} is not recorded yet. Make it up before 12:00 PM.` : `${d} is not recorded yet.`, loadFailed: 'Could not load data: ', selectMethod: 'Select at least one practice method.', saving: 'Saving your check-in...', streak: (n) => `${n}-day streak`, total: (n) => `${n} days total`, unlocked: 'Unlocked: ', successToday: (d) => `${d} check-in complete: `, successMakeup: (d) => `${d} make-up complete: `, saved: (d,m) => `${d} ${m ? 'make-up' : 'check-in'} saved.`, saveFailed: 'Could not save: '
       }
     };
     const localeKey = 'qigong_telegram_locale';
@@ -95,11 +116,27 @@
     const submitStatus = document.getElementById('submitStatus');
     const todayStatus = document.getElementById('todayStatus');
     const languageSelect = document.getElementById('languageSelect');
+    const timezoneCard = document.getElementById('timezoneCard');
+    const timezoneInput = document.getElementById('timezoneInput');
+    const timezoneStatus = document.getElementById('timezoneStatus');
+    const saveTimezone = document.getElementById('saveTimezone');
+    const changeTimezone = document.getElementById('changeTimezone');
+    const timezoneLabel = document.getElementById('timezoneLabel');
+    const dateTabs = document.getElementById('dateTabs');
+    const todayTab = document.getElementById('todayTab');
+    const makeupTab = document.getElementById('makeupTab');
+    const makeupHint = document.getElementById('makeupHint');
+    const methodsCard = document.getElementById('methodsCard');
+    const noteCard = document.getElementById('noteCard');
     let practiceMethods = [];
     let selectedMethodIds = new Set();
     let expandedMethodIds = new Set();
     let profileReady = false;
     let practiceFeelingTags = [];
+    let profile = null;
+    let selectedDate = '';
+    let loadedDate = '';
+    const drafts = new Map();
 
     const getInitData = () => window.Telegram?.WebApp?.initData || '';
     const localizedUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}locale=${encodeURIComponent(locale)}`;
@@ -120,6 +157,7 @@
       languageSelect.value = locale;
       languageSelect.setAttribute('aria-label', t.language);
       practiceNote.placeholder = t.practiceNotePlaceholder;
+      if (profile) renderDateControls();
     };
 
     const noteLines = () => practiceNote.value.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -169,6 +207,64 @@
       el.className = `status ${className}`.trim();
     };
 
+    const shortDate = (date) => date.slice(5).replace('-', '/');
+    const isMakeupMode = () => profile && selectedDate === profile.yesterday;
+    const snapshotDraft = () => {
+      if (!loadedDate) return;
+      drafts.set(loadedDate, { selectedMethodIds: [...selectedMethodIds], practiceNote: practiceNote.value });
+    };
+    const renderDateControls = () => {
+      timezoneLabel.textContent = t.timezoneLabel(profile.practiceTimezone);
+      changeTimezone.textContent = locale === 'en' ? 'Change' : locale === 'zh_CN' ? '更改' : '變更';
+      methodsCard.hidden = !profile.confirmed;
+      noteCard.hidden = !profile.confirmed;
+      submitButton.hidden = !profile.confirmed;
+      dateTabs.hidden = !profile.confirmed;
+      todayTab.textContent = t.todayTab(shortDate(profile.today));
+      makeupTab.textContent = profile.canMakeupYesterday ? t.makeupTab(shortDate(profile.yesterday)) : `${t.makeupTab(shortDate(profile.yesterday))} · 12:00`;
+      makeupTab.disabled = !profile.canMakeupYesterday;
+      todayTab.classList.toggle('active', selectedDate === profile.today);
+      makeupTab.classList.toggle('active', selectedDate === profile.yesterday);
+      makeupHint.textContent = profile.canMakeupYesterday ? t.makeupAvailable : t.makeupClosed(shortDate(profile.yesterday));
+      document.querySelector('.container').classList.toggle('makeup-mode', isMakeupMode());
+      submitButton.textContent = isMakeupMode() ? t.submitMakeup(shortDate(selectedDate)) : t.submitToday(shortDate(selectedDate || profile.today));
+    };
+
+    const applyCheckinData = (data) => {
+      selectedDate = data.date;
+      loadedDate = data.date;
+      renderMethods(practiceMethods, data.selectedMethodIds);
+      practiceNote.value = data.practiceNote || mergeLegacyNotes(data.reflectionNote, data.bodyFeelingNote);
+      renderFeelingTags();
+      renderDateControls();
+      todayStatus.textContent = data.alreadyCheckedIn
+        ? t.alreadyCheckedIn(shortDate(data.date))
+        : t.notCheckedIn(shortDate(data.date), isMakeupMode());
+      drafts.set(data.date, { selectedMethodIds: [...selectedMethodIds], practiceNote: practiceNote.value, alreadyCheckedIn: data.alreadyCheckedIn });
+    };
+
+    const loadCheckinDate = async (date) => {
+      snapshotDraft();
+      selectedDate = date;
+      renderDateControls();
+      submitStatus.textContent = '';
+      const draft = drafts.get(date);
+      if (draft) {
+        loadedDate = date;
+        renderMethods(practiceMethods, draft.selectedMethodIds);
+        practiceNote.value = draft.practiceNote;
+        renderFeelingTags();
+        todayStatus.textContent = draft.alreadyCheckedIn
+          ? t.alreadyCheckedIn(shortDate(date))
+          : t.notCheckedIn(shortDate(date), isMakeupMode());
+        return;
+      }
+      todayStatus.textContent = t.loadingToday;
+      todayStatus.className = 'hint';
+      const data = await apiFetch(`/telegram/api/webapp/checkin?date=${encodeURIComponent(date)}`);
+      applyCheckinData(data);
+    };
+
     const apiFetch = async (url, options = {}, includeLocale = true) => {
       const initData = getInitData();
       if (!initData) {
@@ -191,6 +287,13 @@
       method: 'PATCH',
       body: JSON.stringify({ locale: nextLocale })
     }, false);
+
+    const refreshProfile = async () => {
+      const refreshed = await apiFetch('/telegram/api/webapp/profile', {}, false);
+      profile = refreshed;
+      renderDateControls();
+      return refreshed;
+    };
 
     const normalizeSelectedIds = (methods, selectedIds) => {
       const normalized = new Set();
@@ -392,21 +495,16 @@
 
         const [methodsResp, todayResp, feelingTagsResp] = await Promise.all([
           apiFetch('/telegram/api/webapp/practice-methods').catch((error) => { throw new Error(`${t.methodsLoadFailed}${error.message}`); }),
-          apiFetch('/telegram/api/webapp/checkin/today').catch((error) => { throw new Error(`${t.todayLoadFailed}${error.message}`); }),
+          apiFetch(`/telegram/api/webapp/checkin?date=${encodeURIComponent(selectedDate || profile.today)}`).catch((error) => { throw new Error(`${t.todayLoadFailed}${error.message}`); }),
           apiFetch('/telegram/api/webapp/practice-feeling-tags').catch((error) => {
             console.error(`${t.feelingTagsLoadFailed}${error.message}`);
             return { tags: [] };
           })
         ]);
 
-        renderMethods(methodsResp.methods, todayResp.selectedMethodIds);
-        practiceNote.value = todayResp.practiceNote || mergeLegacyNotes(todayResp.reflectionNote, todayResp.bodyFeelingNote);
+        practiceMethods = methodsResp.methods;
         practiceFeelingTags = feelingTagsResp.tags;
-        renderFeelingTags();
-
-        todayStatus.textContent = todayResp.alreadyCheckedIn
-          ? t.alreadyCheckedIn
-          : t.notCheckedIn;
+        applyCheckinData(todayResp);
       } catch (error) {
         todayStatus.textContent = `${t.loadFailed}${error.message}`;
         todayStatus.className = 'hint error';
@@ -424,10 +522,18 @@
       setStatus(submitStatus, t.saving);
 
       try {
+        const previousToday = profile.today;
+        await refreshProfile();
+        if (previousToday !== profile.today && selectedDate === previousToday) {
+          selectedDate = previousToday;
+          renderDateControls();
+          throw new Error(locale === 'en' ? 'Your local date changed. Review the selected practice date and submit again.' : locale === 'zh_CN' ? '当地日期已变更，请确认练功日期后再次提交。' : '當地日期已變更，請確認練功日期後再次送出。');
+        }
         const result = await apiFetch('/telegram/api/webapp/checkin', {
           method: 'POST',
           body: JSON.stringify({
             methodIds,
+            checkinDate: selectedDate,
             practiceNote: practiceNote.value,
             reflectionNote: practiceNote.value,
             bodyFeelingNote: ''
@@ -438,8 +544,10 @@
         const badgeText = result.unlockedBadges && result.unlockedBadges.length > 0
           ? ` | ${t.unlocked}${result.unlockedBadges.map(b => `${b.emoji} ${b.name}`).join(locale === 'en' ? ', ' : '、')}`
           : '';
-        setStatus(submitStatus, `${t.success}${result.selectedMethods.join(locale === 'en' ? ', ' : '、')}${streakText}${badgeText}`, 'success');
-        todayStatus.textContent = t.saved;
+        const successLabel = result.entryKind === 'makeup' ? t.successMakeup(shortDate(result.date)) : t.successToday(shortDate(result.date));
+        setStatus(submitStatus, `${successLabel}${result.selectedMethods.join(locale === 'en' ? ', ' : '、')}${streakText}${badgeText}`, 'success');
+        todayStatus.textContent = t.saved(shortDate(result.date), result.entryKind === 'makeup');
+        drafts.set(result.date, { selectedMethodIds: methodIds, practiceNote: practiceNote.value, alreadyCheckedIn: true });
         if (tg?.HapticFeedback) {
           tg.HapticFeedback.notificationOccurred('success');
         }
@@ -452,6 +560,50 @@
         setStatus(submitStatus, `${t.saveFailed}${error.message}`, 'error');
       } finally {
         submitButton.disabled = false;
+      }
+    });
+
+    todayTab.addEventListener('click', async () => {
+      try {
+        await refreshProfile();
+        await loadCheckinDate(profile.today);
+      } catch (error) {
+        setStatus(submitStatus, `${t.loadFailed}${error.message}`, 'error');
+      }
+    });
+    makeupTab.addEventListener('click', async () => {
+      try {
+        await refreshProfile();
+        if (!profile.canMakeupYesterday) throw new Error(t.makeupClosed(shortDate(profile.yesterday)));
+        await loadCheckinDate(profile.yesterday);
+      } catch (error) {
+        setStatus(submitStatus, `${t.loadFailed}${error.message}`, 'error');
+      }
+    });
+    changeTimezone.addEventListener('click', () => {
+      if (!profile) return;
+      timezoneInput.value = profile.practiceTimezone;
+      timezoneCard.hidden = false;
+      timezoneCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    saveTimezone.addEventListener('click', async () => {
+      saveTimezone.disabled = true;
+      setStatus(timezoneStatus, t.saving);
+      try {
+        profile = { ...profile, ...(await apiFetch('/telegram/api/webapp/profile/practice-timezone', {
+          method: 'PATCH',
+          body: JSON.stringify({ timezone: timezoneInput.value.trim() })
+        }, false)) };
+        timezoneCard.hidden = profile.confirmed;
+        selectedDate = profile.today;
+        drafts.clear();
+        renderDateControls();
+        setStatus(timezoneStatus, t.timezoneSaved, 'success');
+        await load();
+      } catch (error) {
+        setStatus(timezoneStatus, `${t.timezoneSaveFailed}${error.message}`, 'error');
+      } finally {
+        saveTimezone.disabled = false;
       }
     });
 
@@ -479,17 +631,32 @@
       submitButton.disabled = true;
       try {
         if (getInitData()) {
-          const profile = await apiFetch('/telegram/api/webapp/profile', {}, false);
+          const profileData = await apiFetch('/telegram/api/webapp/profile', {}, false);
+          profile = profileData;
           if (translations[profile.locale]) locale = profile.locale;
           localStorage.setItem(localeKey, locale);
           applyTranslations();
+          const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          timezoneInput.value = profile.confirmed ? profile.practiceTimezone : (detectedTimezone || profile.practiceTimezone);
+          timezoneCard.hidden = profile.confirmed;
+          selectedDate = profile.today;
+          renderDateControls();
+        } else {
+          profileReady = true;
+          await load();
+          return;
         }
         profileReady = true;
-        await load();
+        if (profile?.confirmed) await load();
       } catch (error) {
         console.error('Failed to load WebApp locale profile', error);
+        timezoneCard.hidden = true;
+        methodsCard.hidden = true;
+        noteCard.hidden = true;
+        submitButton.hidden = true;
+        todayStatus.textContent = `${t.loadFailed}${error.message}`;
+        todayStatus.className = 'hint error';
         profileReady = true;
-        await load();
       } finally {
         languageSelect.disabled = false;
         submitButton.disabled = false;

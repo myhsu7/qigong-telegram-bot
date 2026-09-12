@@ -17,6 +17,9 @@ export interface TelegramHistoryEntry {
     reflectionNote: string;
     bodyFeelingNote: string;
     source: string | null;
+    entryKind: 'regular' | 'makeup';
+    practiceTimezone: string;
+    recordedAt: string;
 }
 
 export interface TelegramHistoryResponse {
@@ -31,13 +34,14 @@ export interface TelegramHistoryResponse {
 export const getTelegramHistory = async (
     telegramUserId: number,
     monthParam?: string | null,
-    locale: Locale = 'zh_TW'
+    locale: Locale = 'zh_TW',
+    practiceTimezone = TIMEZONE
 ): Promise<TelegramHistoryResponse> => {
-    const now = moment().tz(TIMEZONE);
+    const now = moment().tz(practiceTimezone);
     let targetMonth = now.clone();
 
     if (monthParam) {
-        const parsedMonth = moment.tz(monthParam, 'YYYY-MM', TIMEZONE);
+        const parsedMonth = moment.tz(monthParam, 'YYYY-MM', practiceTimezone);
         if (parsedMonth.isValid()) {
             targetMonth = parsedMonth;
         }
@@ -54,7 +58,10 @@ export const getTelegramHistory = async (
                     l.practice_note,
                     l.reflection_note,
                     l.body_feeling_note,
-                    l.source,
+                     l.source,
+                     l.entry_kind,
+                     l.practice_timezone,
+                     l.created_at,
                     ARRAY_AGG(pm.id ORDER BY pm.sort_order ASC, pm.id ASC)
                         FILTER (WHERE pm.id IS NOT NULL) AS method_ids,
                     ARRAY_AGG(pm.name_zh ORDER BY pm.sort_order ASC, pm.id ASC)
@@ -69,7 +76,7 @@ export const getTelegramHistory = async (
              ORDER BY l.checkin_date DESC`,
             [telegramUserId, monthStart, monthEnd]
         ),
-        getUserStats(telegramUserId),
+        getUserStats(telegramUserId, practiceTimezone),
         getGroupedUserBadges(telegramUserId, locale)
     ]);
 
@@ -91,6 +98,9 @@ export const getTelegramHistory = async (
             reflectionNote: practiceNote,
             bodyFeelingNote: '',
             source: row.source || null,
+            entryKind: row.entry_kind === 'makeup' ? 'makeup' : 'regular',
+            practiceTimezone: row.practice_timezone || practiceTimezone,
+            recordedAt: moment(row.created_at).toISOString()
         };
     });
 

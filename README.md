@@ -52,6 +52,7 @@ psql "$DATABASE_URL" -f migrations/012_multilingual_experience.sql
 psql "$DATABASE_URL" -f migrations/013_telegram_unified_practice_note.sql
 psql "$DATABASE_URL" -f migrations/014_telegram_backfill_unified_practice_note.sql
 psql "$DATABASE_URL" -f migrations/015_practice_feeling_tags.sql
+psql "$DATABASE_URL" -f migrations/016_makeup_checkins.sql
 ```
 
 ### Option B. If PostgreSQL is running inside Docker
@@ -80,6 +81,7 @@ docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/013_telegram_unified_practice_note.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/014_telegram_backfill_unified_practice_note.sql
 docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/015_practice_feeling_tags.sql
+docker exec -i qigong_db psql -U qigong_user -d qigong_telegram_bot < migrations/016_makeup_checkins.sql
 ```
 
 Migration 011 idempotently awards the 2026 `夏練三伏` badge to users who checked in on all 40 days from July 15 through August 23. The service also reconciles the latest completed Sanfu period at startup and daily at 00:10 Asia/Taipei.

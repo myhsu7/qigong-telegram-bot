@@ -27,6 +27,16 @@ const checkinView = fs.readFileSync(path.join(process.cwd(), 'public/webapp/inde
 const apiRoute = fs.readFileSync(path.join(process.cwd(), 'src/routes/api.ts'), 'utf8');
 const migration = fs.readFileSync(path.join(process.cwd(), 'migrations/016_makeup_checkins.sql'), 'utf8');
 assert.match(checkinView, /id="timezoneCard"/);
+assert.match(checkinView, /<select id="timezoneInput"/);
+assert.doesNotMatch(checkinView, /<input id="timezoneInput"/);
+assert.match(checkinView, /此裝置偵測到/);
+assert.match(checkinView, /洛杉磯（美國西岸）/);
+assert.match(checkinView, /洛杉矶（美国西岸）/);
+assert.match(checkinView, /Los Angeles, US Pacific/);
+assert.match(checkinView, /renderTimezoneOptions/);
+assert.match(checkinView, /class="settings-row"/);
+assert.match(checkinView, /id="changeTimezone"[\s\S]*id="languageSelect"/);
+assert.ok(checkinView.indexOf('id="changeTimezone"') < checkinView.indexOf('id="timezoneCard"'));
 assert.match(checkinView, /id="todayTab"/);
 assert.match(checkinView, /id="makeupTab"/);
 assert.match(checkinView, /checkinDate: selectedDate/);

@@ -33,11 +33,14 @@
     .status { margin-top: 12px; font-size: 14px; }
     .error { color: #b91c1c; }
     .success { color: #166534; }
-    .language-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .settings-row { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
     .language-select { width: auto; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #1f2937; padding: 8px 10px; font-size: 14px; }
+    .timezone-setting { display: inline-flex; align-items: center; gap: 5px; width: auto; max-width: 100%; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #1f2937; padding: 8px 10px; font-size: 14px; font-weight: 500; }
+    .timezone-setting-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timezone-setting-action { color: #2563eb; font-weight: 600; }
     .timezone-card { border: 1px solid #bfdbfe; }
     .timezone-row { display: flex; gap: 8px; align-items: center; }
-    .timezone-input { flex: 1; min-width: 0; border: 1px solid #d1d5db; border-radius: 10px; padding: 11px; font-size: 14px; }
+    .timezone-input { flex: 1; min-width: 0; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; padding: 11px; font-size: 14px; }
     .timezone-button { width: auto; padding: 11px 14px; }
     .date-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .date-tab { background: #e5e7eb; color: #374151; }
@@ -45,23 +48,24 @@
     .date-tab.makeup.active { background: #b45309; }
     .makeup-hint { margin: 10px 0 0; color: #92400e; }
     .makeup-mode { border: 2px solid #f59e0b; }
-    @media (max-width: 480px) { .timezone-row { align-items: stretch; flex-direction: column; } .timezone-button { width: 100%; } .date-tabs { grid-template-columns: 1fr; } }
+    @media (max-width: 480px) { .settings-row { justify-content: stretch; } .timezone-setting { flex: 1; min-width: 0; } .language-select { flex-shrink: 0; } .timezone-row { align-items: stretch; flex-direction: column; } .timezone-button { width: 100%; } .date-tabs { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="language-row"><select id="languageSelect" class="language-select" aria-label="語言"><option value="zh_TW">繁體中文</option><option value="zh_CN">简体中文</option><option value="en">English</option></select></div>
-       <div id="timezoneCard" class="card timezone-card" hidden>
+    <div class="settings-row">
+      <button id="changeTimezone" class="timezone-setting" type="button" hidden><span aria-hidden="true">🌐</span><span id="timezoneLabel" class="timezone-setting-label"></span><span id="changeTimezoneText" class="timezone-setting-action">變更</span></button>
+      <select id="languageSelect" class="language-select" aria-label="語言"><option value="zh_TW">繁體中文</option><option value="zh_CN">简体中文</option><option value="en">English</option></select>
+    </div>
+    <div id="timezoneCard" class="card timezone-card" hidden>
       <h2 data-i18n="timezoneHeading">設定練功時區</h2>
       <p class="muted" data-i18n="timezoneIntro">練功日期與補登期限會依此時區計算，請確認後再打卡。</p>
-      <div class="timezone-row"><input id="timezoneInput" class="timezone-input" list="timezoneOptions" autocomplete="off"><button id="saveTimezone" class="timezone-button" type="button" data-i18n="confirmTimezone">確認時區</button></div>
-      <datalist id="timezoneOptions"><option value="Asia/Taipei"><option value="Asia/Hong_Kong"><option value="Asia/Singapore"><option value="Asia/Tokyo"><option value="Europe/London"><option value="Europe/Paris"><option value="America/New_York"><option value="America/Chicago"><option value="America/Denver"><option value="America/Los_Angeles"><option value="Australia/Sydney"></datalist>
+      <div class="timezone-row"><select id="timezoneInput" class="timezone-input"></select><button id="saveTimezone" class="timezone-button" type="button" data-i18n="confirmTimezone">確認時區</button></div>
       <div id="timezoneStatus" class="status"></div>
     </div>
     <div class="card">
       <h1 data-i18n="heading">今日打卡</h1>
       <p class="muted" data-i18n="intro">請勾選今天練習的功法，並可選填練功心得與感受。</p>
-      <p class="muted"><span id="timezoneLabel"></span> <button id="changeTimezone" class="timezone-button" type="button">變更</button></p>
       <div id="dateTabs" class="date-tabs" hidden><button id="todayTab" class="date-tab active" type="button"></button><button id="makeupTab" class="date-tab makeup" type="button"></button></div>
       <p id="makeupHint" class="muted makeup-hint"></p>
       <div class="hint" id="todayStatus"></div>
@@ -121,6 +125,7 @@
     const timezoneStatus = document.getElementById('timezoneStatus');
     const saveTimezone = document.getElementById('saveTimezone');
     const changeTimezone = document.getElementById('changeTimezone');
+    const changeTimezoneText = document.getElementById('changeTimezoneText');
     const timezoneLabel = document.getElementById('timezoneLabel');
     const dateTabs = document.getElementById('dateTabs');
     const todayTab = document.getElementById('todayTab');
@@ -137,11 +142,81 @@
     let selectedDate = '';
     let loadedDate = '';
     const drafts = new Map();
+    let detectedTimezone = '';
+
+    const timezoneGroups = [
+      { labels:{zh_TW:'亞洲',zh_CN:'亚洲',en:'Asia'}, zones:[
+        ['Asia/Taipei','台北（台灣）','台北（台湾）','Taipei, Taiwan'],
+        ['Asia/Hong_Kong','香港','香港','Hong Kong'],
+        ['Asia/Shanghai','上海／北京（中國）','上海／北京（中国）','Shanghai / Beijing, China'],
+        ['Asia/Singapore','新加坡','新加坡','Singapore'],
+        ['Asia/Tokyo','東京（日本）','东京（日本）','Tokyo, Japan'],
+        ['Asia/Seoul','首爾（韓國）','首尔（韩国）','Seoul, South Korea']
+      ]},
+      { labels:{zh_TW:'歐洲',zh_CN:'欧洲',en:'Europe'}, zones:[
+        ['Europe/London','倫敦（英國）','伦敦（英国）','London, United Kingdom'],
+        ['Europe/Paris','巴黎（法國）','巴黎（法国）','Paris, France'],
+        ['Europe/Berlin','柏林（德國）','柏林（德国）','Berlin, Germany']
+      ]},
+      { labels:{zh_TW:'美洲',zh_CN:'美洲',en:'Americas'}, zones:[
+        ['America/New_York','紐約（美國東岸）','纽约（美国东岸）','New York, US Eastern'],
+        ['America/Toronto','多倫多（加拿大東岸）','多伦多（加拿大东岸）','Toronto, Canada Eastern'],
+        ['America/Chicago','芝加哥（美國中部）','芝加哥（美国中部）','Chicago, US Central'],
+        ['America/Denver','丹佛（美國山區）','丹佛（美国山区）','Denver, US Mountain'],
+        ['America/Los_Angeles','洛杉磯（美國西岸）','洛杉矶（美国西岸）','Los Angeles, US Pacific'],
+        ['America/Vancouver','溫哥華（加拿大西岸）','温哥华（加拿大西岸）','Vancouver, Canada Pacific'],
+        ['Pacific/Honolulu','檀香山（夏威夷）','檀香山（夏威夷）','Honolulu, Hawaii']
+      ]},
+      { labels:{zh_TW:'大洋洲',zh_CN:'大洋洲',en:'Oceania'}, zones:[
+        ['Australia/Sydney','雪梨（澳洲）','悉尼（澳大利亚）','Sydney, Australia'],
+        ['Australia/Melbourne','墨爾本（澳洲）','墨尔本（澳大利亚）','Melbourne, Australia'],
+        ['Pacific/Auckland','奧克蘭（紐西蘭）','奥克兰（新西兰）','Auckland, New Zealand']
+      ]}
+    ];
 
     const getInitData = () => window.Telegram?.WebApp?.initData || '';
     const localizedUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}locale=${encodeURIComponent(locale)}`;
     const getMethodName = (method) => (locale === 'en' ? method.nameEn : locale === 'zh_CN' ? method.nameZhCn : method.nameZh) || method.nameZh || '';
     const getFeelingTagName = (tag) => (locale === 'en' ? tag.nameEn : locale === 'zh_CN' ? tag.nameZhCn : tag.nameZh) || tag.nameZh || '';
+    const timezoneName = (zone) => {
+      for (const group of timezoneGroups) {
+        const match = group.zones.find(([value]) => value === zone);
+        if (match) return locale === 'en' ? match[3] : locale === 'zh_CN' ? match[2] : match[1];
+      }
+      return zone;
+    };
+    const renderTimezoneOptions = (selectedTimezone) => {
+      timezoneInput.replaceChildren();
+      const added = new Set();
+      if (detectedTimezone) {
+        const detected = document.createElement('option');
+        detected.value = detectedTimezone;
+        const detectedLabel = locale === 'en' ? 'Detected on this device' : locale === 'zh_CN' ? '此设备检测到' : '此裝置偵測到';
+        detected.textContent = `${detectedLabel}：${timezoneName(detectedTimezone)}`;
+        timezoneInput.append(detected);
+        added.add(detectedTimezone);
+      }
+      timezoneGroups.forEach((group) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = group.labels[locale];
+        group.zones.forEach(([value, zhTw, zhCn, en]) => {
+          if (added.has(value)) return;
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = locale === 'en' ? en : locale === 'zh_CN' ? zhCn : zhTw;
+          optgroup.append(option);
+          added.add(value);
+        });
+        if (optgroup.children.length) timezoneInput.append(optgroup);
+      });
+      if (selectedTimezone && !added.has(selectedTimezone)) {
+        const option = document.createElement('option');
+        option.value = selectedTimezone;
+        option.textContent = selectedTimezone;
+        timezoneInput.append(option);
+      }
+      timezoneInput.value = selectedTimezone || detectedTimezone || 'Asia/Taipei';
+    };
     const mergeLegacyNotes = (reflection = '', bodyFeeling = '') => {
       const reflectionText = reflection.trim();
       const bodyFeelingText = bodyFeeling.trim();
@@ -157,6 +232,7 @@
       languageSelect.value = locale;
       languageSelect.setAttribute('aria-label', t.language);
       practiceNote.placeholder = t.practiceNotePlaceholder;
+      if (profile || detectedTimezone) renderTimezoneOptions(timezoneInput.value || profile?.practiceTimezone || detectedTimezone);
       if (profile) renderDateControls();
     };
 
@@ -214,8 +290,9 @@
       drafts.set(loadedDate, { selectedMethodIds: [...selectedMethodIds], practiceNote: practiceNote.value });
     };
     const renderDateControls = () => {
-      timezoneLabel.textContent = t.timezoneLabel(profile.practiceTimezone);
-      changeTimezone.textContent = locale === 'en' ? 'Change' : locale === 'zh_CN' ? '更改' : '變更';
+      timezoneLabel.textContent = t.timezoneLabel(timezoneName(profile.practiceTimezone));
+      changeTimezoneText.textContent = locale === 'en' ? 'Change' : locale === 'zh_CN' ? '更改' : '變更';
+      changeTimezone.hidden = !profile.confirmed;
       methodsCard.hidden = !profile.confirmed;
       noteCard.hidden = !profile.confirmed;
       submitButton.hidden = !profile.confirmed;
@@ -582,7 +659,7 @@
     });
     changeTimezone.addEventListener('click', () => {
       if (!profile) return;
-      timezoneInput.value = profile.practiceTimezone;
+      renderTimezoneOptions(profile.practiceTimezone);
       timezoneCard.hidden = false;
       timezoneCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -592,7 +669,7 @@
       try {
         profile = { ...profile, ...(await apiFetch('/telegram/api/webapp/profile/practice-timezone', {
           method: 'PATCH',
-          body: JSON.stringify({ timezone: timezoneInput.value.trim() })
+          body: JSON.stringify({ timezone: timezoneInput.value })
         }, false)) };
         timezoneCard.hidden = profile.confirmed;
         selectedDate = profile.today;
@@ -636,8 +713,8 @@
           if (translations[profile.locale]) locale = profile.locale;
           localStorage.setItem(localeKey, locale);
           applyTranslations();
-          const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          timezoneInput.value = profile.confirmed ? profile.practiceTimezone : (detectedTimezone || profile.practiceTimezone);
+          detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+          renderTimezoneOptions(profile.confirmed ? profile.practiceTimezone : (detectedTimezone || profile.practiceTimezone));
           timezoneCard.hidden = profile.confirmed;
           selectedDate = profile.today;
           renderDateControls();

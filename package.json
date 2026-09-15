@@ -18,14 +18,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/myhsu7/qigong-telegram-bot.git"
+    "url": "git+https://github.com/lulu-lovebird/qigong-telegram-bot.git"
   },
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/myhsu7/qigong-telegram-bot/issues"
+    "url": "https://github.com/lulu-lovebird/qigong-telegram-bot/issues"
   },
-  "homepage": "https://github.com/myhsu7/qigong-telegram-bot#readme",
+  "homepage": "https://github.com/lulu-lovebird/qigong-telegram-bot#readme",
   "dependencies": {
     "basic-auth": "^2.0.1",
     "dotenv": "^17.4.2",
